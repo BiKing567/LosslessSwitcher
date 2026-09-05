@@ -68,44 +68,16 @@ struct MenuView: View {
             }
 
             Menu {
-                Button {
-                    defaults.monitoredBundleIdentifier = Defaults.appleMusicBundleIdentifier
-                    outputDevices.reevaluateNowPlaying()
-                } label: {
-                    if defaults.monitoredBundleIdentifier == Defaults.appleMusicBundleIdentifier {
-                        Image(systemName: "checkmark")
+                ForEach(PlayerProfile.monitoringSources) { profile in
+                    Button {
+                        defaults.monitoredBundleIdentifier = profile.bundleIdentifier
+                        outputDevices.reevaluateNowPlaying()
+                    } label: {
+                        if defaults.monitoredBundleIdentifier == profile.bundleIdentifier {
+                            Image(systemName: "checkmark")
+                        }
+                        Text(verbatim: profile.displayName)
                     }
-                    Text("Apple Music", comment: "Monitoring source option: Apple Music app")
-                }
-
-                Button {
-                    defaults.monitoredBundleIdentifier = Defaults.spotifyBundleIdentifier
-                    outputDevices.reevaluateNowPlaying()
-                } label: {
-                    if defaults.monitoredBundleIdentifier == Defaults.spotifyBundleIdentifier {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("Spotify", comment: "Monitoring source option: Spotify app")
-                }
-
-                Button {
-                    defaults.monitoredBundleIdentifier = Defaults.neteaseMusicBundleIdentifier
-                    outputDevices.reevaluateNowPlaying()
-                } label: {
-                    if defaults.monitoredBundleIdentifier == Defaults.neteaseMusicBundleIdentifier {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("NetEase Music", comment: "Monitoring source option: NetEase CloudMusic app")
-                }
-
-                Button {
-                    defaults.monitoredBundleIdentifier = Defaults.qqMusicBundleIdentifier
-                    outputDevices.reevaluateNowPlaying()
-                } label: {
-                    if defaults.monitoredBundleIdentifier == Defaults.qqMusicBundleIdentifier {
-                        Image(systemName: "checkmark")
-                    }
-                    Text("QQ Music", comment: "Monitoring source option: QQ Music app")
                 }
 
                 Button {
@@ -170,20 +142,7 @@ struct MenuView: View {
 
                     panel.begin { response in
                         guard response == .OK, let path = panel.url?.path else { return }
-                        let isValid: Bool = {
-                            let fm = FileManager.default
-                            var isDir: ObjCBool = false
-                            guard fm.fileExists(atPath: path, isDirectory: &isDir), !isDir.boolValue else { return false }
-                            guard fm.isExecutableFile(atPath: path) else { return false }
-                            let url = URL(fileURLWithPath: path)
-                            if let rv = try? url.resourceValues(forKeys: [.isSymbolicLinkKey]), rv.isSymbolicLink == true { return false }
-                            let resolved = url.resolvingSymlinksInPath().path
-                            let standardized = url.standardized.path
-                            if resolved != standardized { return false }
-                            guard let attrs = try? fm.attributesOfItem(atPath: path),
-                                  let owner = attrs[.ownerAccountName] as? String else { return false }
-                            return owner == NSUserName()
-                        }()
+                        let isValid = UserScriptValidator.isValid(at: path)
                         DispatchQueue.main.async { [weak defaults] in
                             if isValid {
                                 defaults?.shellScriptPath = path

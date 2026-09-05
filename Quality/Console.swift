@@ -25,7 +25,7 @@ enum EntryType: String {
 }
 
 class Console {
-    static func getRecentEntries(type: EntryType, process: String = "Music", durationSeconds: TimeInterval = 5.0) throws -> [SimpleConsole] {
+    static func getRecentEntries(type: EntryType, process: String = PlayerProfile.appleMusic.processName, durationSeconds: TimeInterval = 5.0) throws -> [SimpleConsole] {
         var messages = [SimpleConsole]()
         let store = try OSLogStore.local()
         let duration = store.position(timeIntervalSinceEnd: -durationSeconds)
@@ -50,15 +50,7 @@ class Console {
         guard let app = NSRunningApplication(processIdentifier: pid) else {
             return true
         }
-        let expectedBundle: String? = {
-            switch expectedProcess {
-            case "Music": return Defaults.appleMusicBundleIdentifier
-            case "NeteaseMusic": return Defaults.neteaseMusicBundleIdentifier
-            case "Spotify": return Defaults.spotifyBundleIdentifier
-            case "QQMusic": return Defaults.qqMusicBundleIdentifier
-            default: return nil
-            }
-        }()
+        let expectedBundle = PlayerProfile.bundleIdentifier(forProcessName: expectedProcess)
         if let expectedBundle {
             guard let actualBundle = app.bundleIdentifier, actualBundle == expectedBundle else {
                 return false

@@ -9,10 +9,6 @@ import Foundation
 
 class Defaults: ObservableObject {
     static let shared = Defaults()
-    static let appleMusicBundleIdentifier = "com.apple.Music"
-    static let spotifyBundleIdentifier = "com.spotify.client"
-    static let neteaseMusicBundleIdentifier = "com.netease.163music"
-    static let qqMusicBundleIdentifier = "com.tencent.QQMusicMac"
     private let kUserPreferIconStatusBarItem = "com.biking.RateSync-Key-UserPreferIconStatusBarItem"
     private let kSelectedDeviceUID = "com.biking.RateSync-Key-SelectedDeviceUID"
     private let kUserPreferBitDepthDetection = "com.biking.RateSync-Key-BitDepthDetection"
@@ -26,7 +22,7 @@ class Defaults: ObservableObject {
             kUserPreferIconStatusBarItem : true,
             kUserPreferBitDepthDetection : false,
             kUserPreferSampleRateMultiples : false,
-            kMonitoredBundleIdentifier : Defaults.appleMusicBundleIdentifier,
+            kMonitoredBundleIdentifier : PlayerProfile.appleMusic.bundleIdentifier,
             kAutoEQEnabled : false
         ])
 
@@ -104,17 +100,6 @@ class Defaults: ObservableObject {
     }
 
     static func isValidScriptPathAtLaunch(_ path: String) -> Bool {
-        let fm = FileManager.default
-        var isDir: ObjCBool = false
-        guard fm.fileExists(atPath: path, isDirectory: &isDir), !isDir.boolValue else { return false }
-        guard fm.isExecutableFile(atPath: path) else { return false }
-        let url = URL(fileURLWithPath: path)
-        if let rv = try? url.resourceValues(forKeys: [.isSymbolicLinkKey]), rv.isSymbolicLink == true { return false }
-        let resolved = url.resolvingSymlinksInPath().path
-        let standardized = url.standardized.path
-        if resolved != standardized { return false }
-        guard let attrs = try? fm.attributesOfItem(atPath: path),
-              let owner = attrs[.ownerAccountName] as? String else { return false }
-        return owner == NSUserName()
+        UserScriptValidator.isValid(at: path)
     }
 }

@@ -34,6 +34,17 @@
 		BF7E0D09296336DA009FFEEC /* AudioStreamBasicDescription+Equatable.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7E0D08296336DA009FFEEC /* AudioStreamBasicDescription+Equatable.swift */; };
 		BF9900022E0999990032F001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = BF9900032E0999990032F001 /* Localizable.strings */; };
 		BF1A2B3C2E10000300320001 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = BF1A2B3C2E10000200320001 /* Sparkle */; };
+		BFA000112E10000100320001 /* RateSwitchingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000012E10000100320001 /* RateSwitchingPolicy.swift */; };
+		BFA000122E10000100320001 /* AppleMusicService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000022E10000100320001 /* AppleMusicService.swift */; };
+		BFA000132E10000100320001 /* UserScriptRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000032E10000100320001 /* UserScriptRunner.swift */; };
+		BFA000142E10000100320001 /* AudioFormatSelectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000042E10000100320001 /* AudioFormatSelectorTests.swift */; };
+		BFA000182E10000100320001 /* SwitchingSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000172E10000100320001 /* SwitchingSupportTests.swift */; };
+		BFA0001A2E10000100320001 /* PlayerProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000192E10000100320001 /* PlayerProfile.swift */; };
+		BFA0001B2E10000100320001 /* PlayerProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000192E10000100320001 /* PlayerProfile.swift */; };
+		BFA0001D2E10000100320001 /* OneShotCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0001C2E10000100320001 /* OneShotCompletion.swift */; };
+		BFA0001E2E10000100320001 /* OneShotCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0001C2E10000100320001 /* OneShotCompletion.swift */; };
+		BFA000152E10000100320001 /* RateSwitchingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000012E10000100320001 /* RateSwitchingPolicy.swift */; };
+		BFA000162E10000100320001 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BFA000062E10000100320001 /* XCTest.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -77,6 +88,15 @@
 		BF7E0D08296336DA009FFEEC /* AudioStreamBasicDescription+Equatable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioStreamBasicDescription+Equatable.swift"; sourceTree = "<group>"; };
 		BF9900012E0999990032F001 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh-Hans; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		BF9900042E0999990032F001 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "en.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		BFA000012E10000100320001 /* RateSwitchingPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateSwitchingPolicy.swift; sourceTree = "<group>"; };
+		BFA000022E10000100320001 /* AppleMusicService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicService.swift; sourceTree = "<group>"; };
+		BFA000032E10000100320001 /* UserScriptRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserScriptRunner.swift; sourceTree = "<group>"; };
+		BFA000042E10000100320001 /* AudioFormatSelectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFormatSelectorTests.swift; sourceTree = "<group>"; };
+		BFA000052E10000100320001 /* RateSyncTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RateSyncTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFA000062E10000100320001 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		BFA000172E10000100320001 /* SwitchingSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchingSupportTests.swift; sourceTree = "<group>"; };
+		BFA000192E10000100320001 /* PlayerProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProfile.swift; sourceTree = "<group>"; };
+		BFA0001C2E10000100320001 /* OneShotCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneShotCompletion.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,6 +108,14 @@
 				1272AAB1280DC71B00FD72BA /* Sweep in Frameworks */,
 				BF342D7C2E0935980032F398 /* MediaRemoteAdapter in Frameworks */,
 				BF1A2B3C2E10000300320001 /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			};
+		BFA000082E10000100320001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BFA000162E10000100320001 /* XCTest.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				1272AA96280DBB4900FD72BA /* Quality */,
+				BFA000072E10000100320001 /* RateSyncTests */,
 				1272AA95280DBB4900FD72BA /* Products */,
 				1234F4FD281E80A2007EC9F5 /* Frameworks */,
 			);
@@ -114,6 +143,7 @@
 			isa = PBXGroup;
 			children = (
 				1272AA94280DBB4900FD72BA /* RateSync.app */,
+				BFA000052E10000100320001 /* RateSyncTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -135,6 +165,11 @@
 				1272AAAB280DC5E900FD72BA /* Console.swift */,
 				1272AAAD280DC68A00FD72BA /* CMPlayerStuff.swift */,
 				1221F3FA280F1EEF003E8B77 /* OutputDevices.swift */,
+				BFA000012E10000100320001 /* RateSwitchingPolicy.swift */,
+				BFA000022E10000100320001 /* AppleMusicService.swift */,
+				BFA000032E10000100320001 /* UserScriptRunner.swift */,
+				BFA000192E10000100320001 /* PlayerProfile.swift */,
+				BFA0001C2E10000100320001 /* OneShotCompletion.swift */,
 				1293436A28131591002E19A8 /* CurrentUser.swift */,
 				1254A79B2813FB9400241107 /* Defaults.swift */,
 				1234F50D281E8F07007EC9F5 /* MediaTrack.swift */,
@@ -155,6 +190,15 @@
 				1272AA9E280DBB4B00FD72BA /* Preview Assets.xcassets */,
 			);
 			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		BFA000072E10000100320001 /* RateSyncTests */ = {
+			isa = PBXGroup;
+			children = (
+				BFA000042E10000100320001 /* AudioFormatSelectorTests.swift */,
+				BFA000172E10000100320001 /* SwitchingSupportTests.swift */,
+			);
+			path = RateSyncTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -184,6 +228,22 @@
 			productReference = 1272AA94280DBB4900FD72BA /* RateSync.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BFA000092E10000100320001 /* RateSyncTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BFA0000A2E10000100320001 /* Build configuration list for PBXNativeTarget "RateSyncTests" */;
+			buildPhases = (
+				BFA0000B2E10000100320001 /* Sources */,
+				BFA000082E10000100320001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RateSyncTests;
+			productName = RateSyncTests;
+			productReference = BFA000052E10000100320001 /* RateSyncTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -196,6 +256,9 @@
 				TargetAttributes = {
 					1272AA93280DBB4900FD72BA = {
 						CreatedOnToolsVersion = 13.3;
+					};
+					BFA000092E10000100320001 = {
+						CreatedOnToolsVersion = 16.0;
 					};
 				};
 			};
@@ -220,6 +283,7 @@
 			projectRoot = "";
 			targets = (
 				1272AA93280DBB4900FD72BA /* RateSync */,
+				BFA000092E10000100320001 /* RateSyncTests */,
 			);
 		};
 /* End PBXProject section */
@@ -261,6 +325,23 @@
 				BF342D802E0947890032F398 /* SampleRateLabel.swift in Sources */,
 				BF342D902E0B000100320002 /* StatusBarLabelView.swift in Sources */,
 				127C972D281FCF000087313B /* AppVersion.swift in Sources */,
+				BFA000112E10000100320001 /* RateSwitchingPolicy.swift in Sources */,
+				BFA000122E10000100320001 /* AppleMusicService.swift in Sources */,
+				BFA000132E10000100320001 /* UserScriptRunner.swift in Sources */,
+				BFA0001A2E10000100320001 /* PlayerProfile.swift in Sources */,
+				BFA0001D2E10000100320001 /* OneShotCompletion.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BFA0000B2E10000100320001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BFA000142E10000100320001 /* AudioFormatSelectorTests.swift in Sources */,
+				BFA000182E10000100320001 /* SwitchingSupportTests.swift in Sources */,
+				BFA0001B2E10000100320001 /* PlayerProfile.swift in Sources */,
+				BFA0001E2E10000100320001 /* OneShotCompletion.swift in Sources */,
+				BFA000152E10000100320001 /* RateSwitchingPolicy.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -462,6 +543,30 @@
 			};
 			name = Release;
 		};
+		BFA0000C2E10000100320001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSyncTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		BFA0000D2E10000100320001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSyncTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -479,6 +584,15 @@
 			buildConfigurations = (
 				1272AAA4280DBB4B00FD72BA /* Debug */,
 				1272AAA5280DBB4B00FD72BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BFA0000A2E10000100320001 /* Build configuration list for PBXNativeTarget "RateSyncTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BFA0000C2E10000100320001 /* Debug */,
+				BFA0000D2E10000100320001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

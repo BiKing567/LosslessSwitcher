@@ -27,10 +27,7 @@ class MediaRemoteController {
             Logger.switching.info("track \(trackInfo.payload.uniqueIdentifier) \(trackInfo.payload.title ?? "nil")")
             guard !self.isDuplicate(of: trackInfo) else { return }
             self.lastDeliveredTrack = trackInfo
-            DispatchQueue.main.async {
-                guard let outputDevices else { return }
-                outputDevices.trackDidChange(trackInfo, eventDate: Date())
-            }
+            outputDevices?.trackDidChange(trackInfo, eventDate: Date())
         }
         
     }

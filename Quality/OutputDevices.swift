@@ -13,23 +13,6 @@ import SimplyCoreAudio
 import CoreAudioTypes
 import MediaRemoteAdapter
 
-/// Where a candidate sample rate came from. Only Apple Music's own paths are
-/// known to report a transient rate before settling, so the gate that guards
-/// against that misreport is sized per source.
-private enum RateSource {
-    case mediaRemoteProbe
-    case appleMusicPriority
-    case decoderLog
-    case audioQueueLog
-    /// An AudioQueue log line that predates the current track change, so it
-    /// describes the PREVIOUS track. Retries widen the staleness filter by
-    /// 1.5 s, so such a line can legitimately reach applyStats. It must never
-    /// be applied immediately - it keeps the conservative gate, which holds
-    /// long enough for the new track's own line to be written.
-    case staleAudioQueueLog
-    case preset
-}
-
 class OutputDevices: ObservableObject {
     @Published var selectedOutputDevice: AudioDevice? // auto if nil
     @Published var defaultOutputDevice: AudioDevice?
@@ -37,10 +20,11 @@ class OutputDevices: ObservableObject {
     @Published var currentSampleRate: Float64?
     @Published var currentBitDepth: Int?
     @Published var enableBitDepthDetection = Defaults.shared.userPreferBitDepthDetection
-    
+
     private var enableBitDepthDetectionCancellable: AnyCancellable?
     
     private let coreAudio = SimplyCoreAudio()
+    private let appleMusic = AppleMusicService()
     
     private var changesCancellable: AnyCancellable?
     private var defaultChangesCancellable: AnyCancellable?
@@ -53,22 +37,6 @@ class OutputDevices: ObservableObject {
     private var previousSampleRate: Float64?
     private var previousBitDepth: Int?
     private var lastTrackChangeDate: Date?
-    // Boundary-gate tuning: post-track-change blackout window and how long
-    // a differing candidate must persist before it may be applied.
-    private static let boundaryWindow: TimeInterval = 3.5
-    private static let stabilityConfirmation: TimeInterval = 2.0
-    // Overriding an already-applied rate for the current track requires
-    // overwhelming evidence: transient misreports (e.g. Atmos handshakes)
-    // never survive this long, while genuine corrections do.
-    private static let lockedOverridePersistence: TimeInterval = 12.0
-    // Plausibility bounds for parsed/probed sample rates and bit depths.
-    // The log parsers accept any text that Double()/Int() can read, so a
-    // malformed or hostile log line ("0 Hz", "-96000 Hz",
-    // "99999999999999-bit source") would otherwise reach CoreAudio and
-    // silently force the device to the lowest/highest supported format.
-    // 768 kHz and 64 bit are far above anything real hardware advertises.
-    static let maxPlausibleSampleRate: Double = 768_000
-    static let maxPlausibleBitDepth: Int = 64
     // Cap on retained per-track results, so long listening sessions cannot
     // grow the caches without bound (one entry per distinct MediaTrack).
     private static let maxCachedTracks = 200
@@ -101,48 +69,10 @@ class OutputDevices: ObservableObject {
     private var silentProbeApps: Set<String> = []
     private var probeMissCounts: [String : Int] = [:]
     private static let probeMissesBeforeSkip = 2
-    private static let fastAudioQueueBundles: Set<String> = [
-        Defaults.neteaseMusicBundleIdentifier,
-        Defaults.qqMusicBundleIdentifier
-    ]
-
-    /// Gate policy per rate source. The 3.5 s boundary window + 2.0 s
-    /// stability confirmation exist because Apple Music reports a transient
-    /// 44.1 kHz for several seconds on Dolby Atmos tracks before settling -
-    /// both in its decoder logs and in its MediaRemote payload - so a
-    /// differing rate must not be trusted immediately.
-    /// AudioQueue sources do NOT behave that way: "New output" is written
-    /// once, at queue creation, with the final rate. Measured NetEase
-    /// CloudMusic logs (30-day archive) contain exactly one such line per
-    /// track, with no transient re-report - the closest two lines are
-    /// 12.13 s apart and are genuine track changes. Holding the full gate
-    /// there only adds ~5.5 s of dead time before a rate that was already
-    /// correct on first read.
-    private struct GatePolicy {
-        let boundary: TimeInterval
-        let stability: TimeInterval
-        let lockedOverride: TimeInterval
-
-        static let standard = GatePolicy(boundary: 3.5, stability: 2.0, lockedOverride: 12.0)
-        /// AudioQueue log sources: a single confirmation tick, so a
-        /// straggler line is not applied on its own, then apply.
-        static let audioQueue = GatePolicy(boundary: 0, stability: 0.6, lockedOverride: 12.0)
-    }
-
-    private static func gatePolicy(for source: RateSource) -> GatePolicy {
-        switch source {
-        case .audioQueueLog:
-            return .audioQueue
-        case .staleAudioQueueLog, .mediaRemoteProbe, .appleMusicPriority, .decoderLog, .preset:
-            return .standard
-        }
-    }
-
-
-    var trackAndSample = [MediaTrack : Float64]()
-    var trackAndBitDepth = [MediaTrack : Int]()
-    var previousTrack: MediaTrack?
-    var currentTrack: MediaTrack?
+    private var trackAndSample = [MediaTrack : Float64]()
+    private var trackAndBitDepth = [MediaTrack : Int]()
+    private var previousTrack: MediaTrack?
+    private var currentTrack: MediaTrack?
     
     var timerCalls = 0
     
@@ -177,7 +107,7 @@ class OutputDevices: ObservableObject {
 
         startPolling()
     }
-    
+
     /// Re-applies the persisted output device selection at launch.
     /// Falls back to "Default Device" when the saved device is gone
     /// (unplugged, renamed) or when none was ever chosen.
@@ -202,6 +132,12 @@ class OutputDevices: ObservableObject {
     }
     
     func renewTimer() {
+        DispatchQueue.main.async { [weak self] in
+            self?.renewTimerOnMain()
+        }
+    }
+
+    private func renewTimerOnMain() {
         if timerCancellable != nil { return }
         timerCancellable = Timer
             .publish(every: 2, on: .main, in: .default)
@@ -215,13 +151,7 @@ class OutputDevices: ObservableObject {
                     self.timerCancellable = nil
                 }
                 else {
-                    // Snapshot the track at tick time so the stale-task guard
-                    // in switchLatestSampleRate can discard ticks that belong
-                    // to a track that has since changed.
-                    let trackSnapshot = self.currentTrack
-                    self.processQueue.async {
-                        self.switchLatestSampleRate(for: trackSnapshot)
-                    }
+                    self.scheduleSwitchForCurrentTrack()
                 }
             }
     }
@@ -235,40 +165,16 @@ class OutputDevices: ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self else { return }
-                let snapshot = self.currentTrack
-                self.processQueue.async {
-                    self.switchLatestSampleRate(for: snapshot)
-                }
+                self.scheduleSwitchForCurrentTrack()
             }
     }
     
     func getDeviceSampleRate() {
         let defaultDevice = self.selectedOutputDevice ?? self.defaultOutputDevice
         guard let sampleRate = defaultDevice?.nominalSampleRate else { return }
-        self.updateSampleRate(sampleRate, bitDepth: nil)
-    }
-    
-    func getSampleRateFromAppleScript() -> Double? {
-        let scriptContents = "tell application \"Music\" to get sample rate of current track"
-        var error: NSDictionary?
-        
-        if let script = NSAppleScript(source: scriptContents) {
-            let output = script.executeAndReturnError(&error).stringValue
-            
-            if let error = error {
-                Logger.switching.info("[APPLESCRIPT] - \(error)")
-            }
-            guard let output = output else { return nil }
-
-            if output == "missing value" {
-                return nil
-            }
-            else {
-                return Double(output)
-            }
+        processQueue.async { [weak self] in
+            self?.updateSampleRate(sampleRate, bitDepth: nil)
         }
-        
-        return nil
     }
 
     /// Resolves the playing app's bundle identifier, falling back to the
@@ -302,231 +208,45 @@ class OutputDevices: ObservableObject {
     /// from Apple Music. For any other (or unknown) source they would apply
     /// Apple Music's sample rate to a track playing in a different app.
     private var isAppleMusicSource: Bool {
-        return Self.resolveBundleIdentifier(track: currentTrack) == Defaults.appleMusicBundleIdentifier
+        Self.resolveBundleIdentifier(track: currentTrack) == PlayerProfile.appleMusic.bundleIdentifier
     }
 
-    /// True only when the Music process is actually running.
-    /// Every `tell application "Music"` block launches Music if it is not
-    /// already running, so any AppleScript query must be gated on this -
-    /// otherwise monitoring a non-Apple-Music app would start Music as a
-    /// side effect of the priority check below.
-    private var isAppleMusicRunning: Bool {
-        NSWorkspace.shared.runningApplications.contains {
-            $0.bundleIdentifier == Defaults.appleMusicBundleIdentifier
-        }
+    private var shouldPrioritizeAppleMusic: Bool {
+        AppleMusicPriorityPolicy.shouldPrioritize(
+            monitoredBundleIdentifier: Defaults.shared.monitoredBundleIdentifier,
+            sourceBundleIdentifier: Self.resolveBundleIdentifier(track: currentTrack)
+        )
     }
 
-    /// When another player triggers the event but Apple Music is playing at
-    /// the same time, Apple Music wins: its sample rate is applied. Returns
-    /// nil when the event source is Apple Music itself (its normal chain
-    /// already handles it), when Apple Music is not running/not playing, or
-    /// when the query fails (e.g. automation permission missing - safe degradation).
-    private func appleMusicPriorityStat() -> CMPlayerStats? {
-        guard !isAppleMusicSource else { return nil }
-        // Music is queried on every switch for non-Apple-Music sources.
-        // Without this check the AppleScript below would launch Music.
-        guard isAppleMusicRunning else { return nil }
-        guard let state = appleMusicPlaybackState(), state.isPlaying,
-              let sampleRate = state.sampleRate, sampleRate > 0 else {
-            return nil
-        }
-        return CMPlayerStats(sampleRate: sampleRate, bitDepth: previousBitDepth ?? 24, date: Date())
+    private func isExpectedTrackCurrent(_ expectedTrack: MediaTrack?) -> Bool {
+        guard let expectedTrack else { return true }
+        return currentTrack == expectedTrack
     }
-
-    /// Fetches Apple Music's current track genre (nil when not playing or
-    /// unavailable). Apple Music only - other apps do not expose genre.
-    private func appleMusicGenre() -> String? {
-        let script = """
-        tell application "Music"
-            if player state is playing then
-                return (genre of current track)
-            end if
-            return ""
-        end tell
-        """
-        var error: NSDictionary?
-        guard let output = NSAppleScript(source: script)?.executeAndReturnError(&error).stringValue else {
-            if let error = error {
-                Logger.switching.info("[AM genre] error: \(error)")
-            }
-            return nil
-        }
-        if output.isEmpty || output == "missing value" {
-            return nil
-        }
-        return output
-    }
-
-    /// Maps a track genre to Apple Music's localized EQ preset name.
-    /// Presets verified via `name of EQ presets` (zh-Hans system).
-    /// Returns nil to leave the current EQ untouched.
-    /// Security: allowlist-only — genre is attacker-controlled (ID3 tag) and
-    /// must never be interpolated into AppleScript. Only hardcoded preset names
-    /// are returned; unknown/injected genres return nil.
-    static func eqPreset(forGenre genre: String?) -> String? {
-        guard let genre else { return nil }
-        let g = genre.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        switch g {
-        case "摇滚", "摇滚乐", "rock", "alternative", "punk", "metal", "hard rock", "j-rock", "jrock", "日语摇滚", "日本摇滚":
-            return "摇滚乐"
-        case "流行", "流行乐", "pop", "mandopop", "c-pop", "k-pop", "cpop", "kpop", "synthpop",
-             "j-pop", "jpop", "japanese pop", "japanese", "日语流行", "日本流行", "日语", "日本",
-             "anime", "动漫", "动画", "j-pop/anime", "city pop":
-            return "流行乐"
-        case "古典", "classical", "opera", "orchestra", "chamber", "symphony":
-            return "古典"
-        case "爵士", "爵士乐", "jazz", "swing", "blues", "bebop":
-            return "爵士乐"
-        case "嘻哈", "嘻哈音乐", "说唱", "rap", "hip hop", "hip-hop", "hiphop", "trap", "grime":
-            return "嘻哈音乐"
-        case "电子", "电子乐", "electronic", "edm", "techno", "house", "trance", "dubstep", "ambient", "chillout":
-            return "电子乐"
-        case "舞曲", "dance", "disco", "club":
-            return "舞曲"
-        case "民谣", "原声", "acoustic", "folk", "country", "indie folk", "民乐":
-            return "原声"
-        case "r&b", "rnb", "soul", "funk", "neo soul":
-            return "R&B"
-        case "钢琴", "piano", "instrumental", "new age", "solo piano", "纯音乐", "轻音乐":
-            return "钢琴曲"
-        case "诵读", "spoken word", "audiobook", "podcast", "有声书", "播客":
-            return "诵读音乐"
-        case "拉丁", "latin", "salsa", "reggaeton", "bossa nova":
-            return "拉丁音乐"
-        case "休闲", "lounge", "easy listening", "chill", "lo-fi", "lofi", "氛围", "演歌", "enka":
-            return "平缓"
-        default:
-            return nil
-        }
-    }
-
-    /// Last EQ preset applied, to avoid re-applying for repeated events.
-    private var lastAppliedEQPreset: String?
-    private let eqLock = NSLock()
 
     /// Applies Apple Music's EQ preset matching the current track's genre.
-    /// Apple Music only; no-op when the switch is off, the source is not
-    /// Apple Music, the genre maps to no preset, or the preset is unchanged.
+    /// Apple Music-specific automation is kept in AppleMusicService.
     func applyAppleMusicEQIfNeeded() {
-        guard Defaults.shared.autoEQEnabled else {
-            Logger.switching.info("[EQ] skipped: switch off")
-            return
-        }
-        guard isAppleMusicSource else {
-            Logger.switching.info("[EQ] skipped: source is not Apple Music (\(Self.resolveBundleIdentifier(track: self.currentTrack) ?? "unknown", privacy: .public))")
-            return
-        }
-        guard isAppleMusicRunning else {
-            Logger.switching.info("[EQ] skipped: Music is not running")
-            return
-        }
-        guard let genre = appleMusicGenre() else {
-            Logger.switching.info("[EQ] skipped: no genre")
-            return
-        }
-        guard let preset = Self.eqPreset(forGenre: genre) else {
-            Logger.switching.info("[EQ] skipped: genre \(genre, privacy: .public) maps to no preset")
-            return
-        }
-        eqLock.lock()
-        let unchanged = (preset == lastAppliedEQPreset)
-        if !unchanged {
-            lastAppliedEQPreset = preset
-        }
-        eqLock.unlock()
-        guard !unchanged else {
-            Logger.switching.info("[EQ] skipped: preset \(preset, privacy: .public) already applied")
-            return
-        }
-        Logger.switching.info("[EQ] genre \(genre, privacy: .public) -> preset \(preset, privacy: .public)")
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.setAppleMusicEQ(preset)
+        processQueue.async { [weak self] in
+            self?.scheduleAppleMusicEQUpdate()
         }
     }
 
-    /// Switches Apple Music's built-in EQ preset via UI automation.
-    /// AppleScript writes to EQ properties are read-only, so System Events
-    /// (Accessibility + Automation permissions) is required. Music must be
-    /// activated for the menu action to take effect; the previously active
-    /// app is restored afterwards so focus returns quickly.
-    func setAppleMusicEQ(_ preset: String) {
-        let allowedPresets: Set<String> = ["摇滚乐","流行乐","古典","爵士乐","嘻哈音乐","电子乐","舞曲","原声","R&B","钢琴曲","诵读音乐","拉丁音乐","平缓"]
-        guard allowedPresets.contains(preset) else {
-            Logger.switching.error("[EQ] rejected non-allowlisted preset \(preset, privacy: .public)")
-            return
-        }
-        Logger.switching.info("[EQ] accessibility trusted: \(AXIsProcessTrusted(), privacy: .public)")
-        let previousFrontmost = NSWorkspace.shared.frontmostApplication
-        let script = """
-        tell application "Music" to activate
-        delay 0.3
-        tell application "System Events"
-            tell process "Music"
-                -- Open the EQ window via the Window menu.
-                try
-                    click menu item "均衡器" of menu 1 of menu bar item "窗口" of menu bar 1
-                on error
-                    click menu item "Equalizer" of menu 1 of menu bar item "Window" of menu bar 1
-                end try
-                delay 0.4
-                set eqWin to (first window whose name contains "均衡器" or name contains "Equalizer")
-                click pop up button 1 of eqWin
-                delay 0.3
-                click menu item "\(preset)" of menu 1 of pop up button 1 of eqWin
-                delay 0.2
-                -- Ensure the equalizer is enabled. Setting the checkbox value
-                -- is unreliable; click it only when it is not checked.
-                if (value of checkbox 1 of eqWin) is 0 then
-                    click checkbox 1 of eqWin
-                end if
-                -- Close the EQ window again (toggle the menu item).
-                try
-                    click menu item "均衡器" of menu 1 of menu bar item "窗口" of menu bar 1
-                on error
-                    click menu item "Equalizer" of menu 1 of menu bar item "Window" of menu bar 1
-                end try
-            end tell
-        end tell
-        """
-        var error: NSDictionary?
-        NSAppleScript(source: script)?.executeAndReturnError(&error)
-        if let error = error {
-            Logger.switching.info("[EQ] failed: \(String(describing: error), privacy: .public)")
-        }
-        // Give the focus back to the app that was active before the switch.
-        if let previousFrontmost {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                previousFrontmost.activate(options: [.activateIgnoringOtherApps])
-            }
+    private func scheduleAppleMusicEQUpdate() {
+        let isEnabled = Defaults.shared.autoEQEnabled
+        let isCurrentSource = isAppleMusicSource
+        DispatchQueue.global(qos: .userInitiated).async { [appleMusic] in
+            appleMusic.applyEQIfNeeded(isEnabled: isEnabled, isCurrentSource: isCurrentSource)
         }
     }
 
-    private func appleMusicPlaybackState() -> (isPlaying: Bool, sampleRate: Double?)? {
-        let script = """
-        tell application "Music"
-            if player state is playing then
-                return (sample rate of current track) as string
-            end if
-            return ""
-        end tell
-        """
-        var error: NSDictionary?
-        guard let output = NSAppleScript(source: script)?.executeAndReturnError(&error).stringValue else {
-            if let error = error {
-                Logger.switching.info("[AM state] error: \(error)")
-            }
-            return nil
+    private func scheduleSwitchForCurrentTrack() {
+        processQueue.async { [weak self] in
+            guard let self else { return }
+            self.switchLatestSampleRate(for: self.currentTrack)
         }
-        if output.isEmpty {
-            return (false, nil)
-        }
-        if output == "missing value" {
-            return (true, nil)
-        }
-        return (true, Double(output))
     }
     
-    func getAllStats(process: String = "Music",
+    func getAllStats(process: String = PlayerProfile.appleMusic.processName,
                      parser: ([SimpleConsole]) -> [CMPlayerStats] = CMPlayerParser.parseCoreAudioConsoleLogs,
                      durationSeconds: TimeInterval = 5.0) -> [CMPlayerStats] {
         var allStats = [CMPlayerStats]()
@@ -540,12 +260,6 @@ class OutputDevices: ObservableObject {
             Logger.switching.info("[getAllStats, error] \(error)")
         }
 
-        if allStats.isEmpty, isAppleMusicSource, let sampleRate = getSampleRateFromAppleScript() {
-            let stat = CMPlayerStats(sampleRate: sampleRate, bitDepth: previousBitDepth ?? 24, date: Date())
-            allStats.append(stat)
-            Logger.switching.info("[getAllStats] AppleScript fallback: \(stat)")
-        }
-        
         return allStats
     }
     
@@ -568,12 +282,10 @@ class OutputDevices: ObservableObject {
         // Apple Music priority dance (which costs AppleScript + 1.0s probe timeout).
         // Bypassing both cuts ~1.0-1.5s off every switch, while AM keeps its
         // full 3.5s/2.0s Atmos gate unchanged.
-        if let bundleID = Self.resolveBundleIdentifier(track: currentTrack),
-           Self.fastAudioQueueBundles.contains(bundleID) {
-            Logger.switching.info("[FastPath] \(bundleID, privacy: .public) -> direct AudioQueue chain")
-            self.processQueue.async {
-                self.runLogChain(expectedTrack: expectedTrack, recursion: recursion)
-            }
+        if let profile = PlayerProfile.profile(for: Self.resolveBundleIdentifier(track: currentTrack)),
+           profile.formatDetection == .audioQueueLogs {
+            Logger.switching.info("[FastPath] \(profile.bundleIdentifier, privacy: .public) -> direct AudioQueue chain")
+            self.runLogChain(expectedTrack: expectedTrack, recursion: recursion)
             return
         }
         // Apps already known to report nothing are skipped entirely: a miss
@@ -582,50 +294,126 @@ class OutputDevices: ObservableObject {
         if let bundleID = Self.resolveBundleIdentifier(track: currentTrack),
            silentProbeApps.contains(bundleID) {
             Logger.switching.info("[MRProbe] skipping probe for silent app \(bundleID, privacy: .public)")
-            self.processQueue.async {
-                self.runLogChain(expectedTrack: expectedTrack, recursion: recursion)
-            }
+            self.runLogChain(expectedTrack: expectedTrack, recursion: recursion)
             return
         }
-        MediaRemoteSampleRateProbe.fetchAudioFormat(expectedPID: currentTrack?.pid) { [weak self] sampleRate, bitDepth in
+        MediaRemoteSampleRateProbe.fetchAudioFormat(expectedPID: currentTrack?.pid) { [weak self] sampleRate, reportedBitDepth in
             guard let self else { return }
             // The probe callback arrives on an arbitrary queue; hop back to
             // the serial processQueue and re-check the track snapshot, since
             // the track may have changed while the probe was in flight.
             self.processQueue.async {
-                if let expectedTrack = expectedTrack, self.currentTrack != expectedTrack {
+                if !self.isExpectedTrackCurrent(expectedTrack) {
                     Logger.switching.info("stale switch task after probe, skip")
                     return
                 }
-                // Apple Music priority: when another player (e.g. Spotify)
-                // triggers an event while Apple Music is also playing, the
-                // sample rate to apply is Apple Music's, not the event
-                // source's. Only checked for non-Apple-Music sources.
-                if let amStat = self.appleMusicPriorityStat() {
-                    Logger.switching.info("[AM Priority] Apple Music is playing, using its sample rate")
-                    self.applyStats([amStat], source: .appleMusicPriority, expectedTrack: expectedTrack, recursion: recursion)
-                    // Keep Apple Music's EQ in sync with its own genre too.
-                    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                        self?.applyAppleMusicEQIfNeeded()
-                    }
+                self.applyAppleMusicPriorityOrMediaRemote(
+                    sampleRate: sampleRate,
+                    reportedBitDepth: reportedBitDepth,
+                    expectedTrack: expectedTrack,
+                    recursion: recursion
+                )
+            }
+        }
+    }
+
+    private func applyAppleMusicPriorityOrMediaRemote(
+        sampleRate: Double?,
+        reportedBitDepth: Int?,
+        expectedTrack: MediaTrack?,
+        recursion: Bool
+    ) {
+        guard shouldPrioritizeAppleMusic, appleMusic.isRunning else {
+            applyMediaRemoteProbe(
+                sampleRate: sampleRate,
+                reportedBitDepth: reportedBitDepth,
+                expectedTrack: expectedTrack,
+                recursion: recursion
+            )
+            return
+        }
+
+        appleMusic.fetchPlaybackState { [weak self] state in
+            guard let self else { return }
+            self.processQueue.async {
+                guard self.isExpectedTrackCurrent(expectedTrack) else {
+                    Logger.switching.info("stale switch task after Apple Music priority check, skip")
                     return
                 }
-                if let sampleRate, sampleRate > 0 {
-                    let stat = CMPlayerStats(sampleRate: sampleRate, bitDepth: self.previousBitDepth ?? 24, date: Date())
-                    Logger.switching.info("[MRProbe] direct audio format: \(sampleRate) Hz, \(bitDepth ?? -1) bit")
-                    self.applyStats([stat], source: .mediaRemoteProbe, expectedTrack: expectedTrack, recursion: recursion)
-                } else {
-                    self.recordProbeMissIfPossible()
-                    self.runLogChain(expectedTrack: expectedTrack, recursion: recursion)
+                if let state,
+                   state.isPlaying,
+                   let appleMusicSampleRate = state.sampleRate,
+                   appleMusicSampleRate > 0 {
+                    let stat = CMPlayerStats(
+                        sampleRate: appleMusicSampleRate,
+                        bitDepth: self.previousBitDepth ?? 24,
+                        date: Date()
+                    )
+                    Logger.switching.info("[AM Priority] Apple Music is playing, using its sample rate")
+                    self.applyStats([stat], source: .appleMusicPriority, expectedTrack: expectedTrack, recursion: recursion)
+                    self.scheduleAppleMusicEQUpdate()
+                    return
                 }
+                self.applyMediaRemoteProbe(
+                    sampleRate: sampleRate,
+                    reportedBitDepth: reportedBitDepth,
+                    expectedTrack: expectedTrack,
+                    recursion: recursion
+                )
             }
+        }
+    }
+
+    private func applyMediaRemoteProbe(
+        sampleRate: Double?,
+        reportedBitDepth: Int?,
+        expectedTrack: MediaTrack?,
+        recursion: Bool
+    ) {
+        if let sampleRate, sampleRate > 0 {
+            let bitDepth = RateSwitchingPolicy.bitDepth(
+                reportedByMediaRemote: reportedBitDepth,
+                fallback: previousBitDepth
+            )
+            let stat = CMPlayerStats(sampleRate: sampleRate, bitDepth: bitDepth, date: Date())
+            Logger.switching.info("[MRProbe] direct audio format: \(sampleRate) Hz, \(reportedBitDepth ?? -1) bit")
+            applyStats([stat], source: .mediaRemoteProbe, expectedTrack: expectedTrack, recursion: recursion)
+        } else {
+            recordProbeMissIfPossible()
+            runLogChain(expectedTrack: expectedTrack, recursion: recursion)
         }
     }
 
     /// Log-based rate resolution plus the preset fallback, run after the
     /// MediaRemote probe reported nothing (or was skipped).
     private func runLogChain(expectedTrack: MediaTrack?, recursion: Bool) {
-        let logStats = self.statsFromLogs(expectedTrack: expectedTrack, recursion: recursion)
+        let logStats = self.statsFromLogs(recursion: recursion)
+        if logStats.isEmpty, isAppleMusicSource, appleMusic.isRunning {
+            appleMusic.fetchPlaybackState { [weak self] state in
+                guard let self else { return }
+                self.processQueue.async {
+                    guard self.isExpectedTrackCurrent(expectedTrack) else {
+                        Logger.switching.info("stale switch task after Apple Music log fallback, skip")
+                        return
+                    }
+                    if let state,
+                       state.isPlaying,
+                       let sampleRate = state.sampleRate,
+                       sampleRate > 0 {
+                        let stat = CMPlayerStats(
+                            sampleRate: sampleRate,
+                            bitDepth: self.previousBitDepth ?? 24,
+                            date: Date()
+                        )
+                        Logger.switching.info("[LogFallback] Apple Music AppleScript sample rate: \(sampleRate)")
+                        self.applyStats([stat], source: .decoderLog, expectedTrack: expectedTrack, recursion: recursion)
+                    } else {
+                        self.applyStats([], source: .decoderLog, expectedTrack: expectedTrack, recursion: recursion)
+                    }
+                }
+            }
+            return
+        }
         // Lowest-priority fallback: known apps that neither report
         // Now Playing audio format keys nor emit parseable decoder
         // logs get a preset sample rate, so switching still happens.
@@ -640,7 +428,7 @@ class OutputDevices: ObservableObject {
             // The AudioQueue parser is the only log parser used for
             // non-Apple-Music processes; Apple Music's own decoder parser
             // feeds the log entries that the Atmos gate was designed for.
-            let source: RateSource = (Self.resolveProcessName(track: currentTrack) == "Music")
+            let source: RateSource = (Self.resolveProcessName(track: currentTrack) == PlayerProfile.appleMusic.processName)
                 ? .decoderLog
                 : self.audioQueueSource(for: logStats)
             self.applyStats(logStats, source: source, expectedTrack: expectedTrack, recursion: recursion)
@@ -690,25 +478,19 @@ class OutputDevices: ObservableObject {
     /// Extend this table per app after measuring its actual behaviour.
     static func presetSampleRate(for bundleIdentifier: String?) -> Double? {
         guard let bundleIdentifier else { return nil }
-        switch bundleIdentifier {
-        case Defaults.spotifyBundleIdentifier:
-            return 44100
-        default:
-            return nil
-        }
+        return PlayerProfile.profile(for: bundleIdentifier)?.fallbackSampleRate
     }
 
     /// Log-based fallback chain, per source process:
-    /// - "Music" (Apple Music): Apple's decoder logs + AppleScript.
     /// - Any other process (e.g. "NeteaseMusic"): AudioQueue "New output"
     ///   entries, which report the decoded sample rate for players that
     ///   render through AudioQueue without resampling.
-    private func statsFromLogs(expectedTrack: MediaTrack?, recursion: Bool) -> [CMPlayerStats] {
+    private func statsFromLogs(recursion: Bool) -> [CMPlayerStats] {
         guard let processName = Self.resolveProcessName(track: currentTrack) else {
             Logger.switching.info("cannot resolve source process name, skipping log chain")
             return []
         }
-        let isMusicProcess = (processName == "Music")
+        let isMusicProcess = (processName == PlayerProfile.appleMusic.processName)
         var allStats: [CMPlayerStats]
         if isMusicProcess {
             guard isAppleMusicSource else { return [] }
@@ -732,13 +514,6 @@ class OutputDevices: ObservableObject {
             // if the AppleScript fallback also fails, the switch would be lost.
             let threshold = recursion ? lastTrackChangeDate.addingTimeInterval(-1.5) : lastTrackChangeDate
             allStats = allStats.filter { $0.date >= threshold }
-            // If every log entry was filtered out, it may mean the new track's
-            // logs are not in the window yet. Fall back to AppleScript on the
-            // initial attempt so switching is not lost.
-            if allStats.isEmpty, !recursion, isMusicProcess, let sampleRate = getSampleRateFromAppleScript() {
-                allStats = [CMPlayerStats(sampleRate: sampleRate, bitDepth: previousBitDepth ?? 24, date: Date())]
-                Logger.switching.info("[switchLatestSampleRate] AppleScript fallback after filtering: \(sampleRate)")
-            }
         }
         return allStats
     }
@@ -782,7 +557,7 @@ class OutputDevices: ObservableObject {
     /// Applies the best matching device format for the given stats, and
     /// schedules one retry when nothing usable was found yet.
     private func applyStats(_ allStats: [CMPlayerStats], source: RateSource = .decoderLog, expectedTrack: MediaTrack?, recursion: Bool) {
-        let policy = Self.gatePolicy(for: source)
+        let policy = RateSwitchingPolicy.gatePolicy(for: source)
         let defaultDevice = self.selectedOutputDevice ?? self.defaultOutputDevice
 
         var didFindStat = false
@@ -797,7 +572,7 @@ class OutputDevices: ObservableObject {
            // valid reading without starting a retry loop.
            first.sampleRate.isFinite,
            first.sampleRate > 0,
-           first.sampleRate <= Self.maxPlausibleSampleRate {
+           first.sampleRate <= RateSwitchingPolicy.maxPlausibleSampleRate {
             didFindStat = true
             let sampleRate = Float64(first.sampleRate)
             // Clamp instead of truncating, and clamp before use:
@@ -805,7 +580,7 @@ class OutputDevices: ObservableObject {
             // into a bogus but plausible-looking value
             // (99999999999999 -> 276447231). A garbage depth must not cost
             // us a valid rate, so it is clamped, not rejected.
-            let bitDepth = Int32(clamping: min(max(first.bitDepth, 1), Self.maxPlausibleBitDepth))
+            let bitDepth = Int32(clamping: min(max(first.bitDepth, 1), RateSwitchingPolicy.maxPlausibleBitDepth))
 
             // Boundary gating: right after a track change, players
             // transitioning between formats (e.g. Dolby Atmos) report an
@@ -864,32 +639,16 @@ class OutputDevices: ObservableObject {
             guard let defaultDevice = defaultDevice,
                   let formats = self.getFormats(device: defaultDevice) else { return }
 
-            // https://stackoverflow.com/a/65060134
-            var nearest = supported.min(by: {
-                abs($0 - sampleRate) < abs($1 - sampleRate)
-            })
+            let suitableFormat = AudioFormatSelector.nearestFormat(
+                sampleRate: sampleRate,
+                bitDepth: bitDepth,
+                supportedSampleRates: supported,
+                formats: formats,
+                preferSampleRateMultiples: Defaults.shared.userPreferSampleRateMultiples
+            )
+            Logger.switching.info("NEAREST FORMAT \(suitableFormat.map { "\($0.mSampleRate)Hz/\($0.mBitsPerChannel)bit" } ?? "none", privacy: .public)")
 
-            // Tie-break equal distances toward the LOWER depth (closer to typical content).
-            let nearestBitDepth = formats.min(by: {
-                let d0 = abs(Int32($0.mBitsPerChannel) - bitDepth)
-                let d1 = abs(Int32($1.mBitsPerChannel) - bitDepth)
-                if d0 != d1 { return d0 < d1 }
-                return $0.mBitsPerChannel < $1.mBitsPerChannel
-            })
-
-            if Defaults.shared.userPreferSampleRateMultiples,
-               let nearestSampleRate = nearest,
-               nearestSampleRate != sampleRate, supported.contains(sampleRate / 2) {
-                nearest = sampleRate / 2
-            }
-
-            let nearestFormat = formats.filter({
-                $0.mSampleRate == nearest && $0.mBitsPerChannel == nearestBitDepth?.mBitsPerChannel
-            })
-
-            Logger.switching.info("NEAREST FORMAT \(nearestFormat.map { "\($0.mSampleRate)Hz/\($0.mBitsPerChannel)bit" }.joined(separator: ", "), privacy: .public)")
-
-            if let suitableFormat = nearestFormat.first {
+            if let suitableFormat {
                 // Same-track lock: once a sample rate has been applied for the current
                 // track, never switch again within the same song unless the output
                 // device itself changed (e.g. the user switched device), the parsed
@@ -992,7 +751,7 @@ class OutputDevices: ObservableObject {
             self.currentBitDepth = bitDepth
         }
         if runUserScript {
-            self.runUserScript(sampleRate, bitDepth: bitDepth)
+            UserScriptRunner.run(sampleRate: sampleRate, bitDepth: bitDepth)
         }
     }
     
@@ -1006,76 +765,6 @@ class OutputDevices: ObservableObject {
         }
     }
 
-    /// Validates that a user-script path is safe to execute.
-    /// Checks: exists, is file (not directory), is executable, is not a symlink,
-    /// and is owned by the current user. Rejects world-writable symlink escapes
-    /// and `defaults write` injected paths from other apps.
-    static func isValidUserScript(at path: String) -> Bool {
-        let fm = FileManager.default
-        var isDir: ObjCBool = false
-        guard fm.fileExists(atPath: path, isDirectory: &isDir), !isDir.boolValue else {
-            Logger.switching.error("[Script] rejected: not found or is directory \(path, privacy: .public)")
-            return false
-        }
-        guard fm.isExecutableFile(atPath: path) else {
-            Logger.switching.error("[Script] rejected: not executable \(path, privacy: .public)")
-            return false
-        }
-        let url = URL(fileURLWithPath: path)
-        if let rv = try? url.resourceValues(forKeys: [.isSymbolicLinkKey]), rv.isSymbolicLink == true {
-            Logger.switching.error("[Script] rejected: symlink \(path, privacy: .public)")
-            return false
-        }
-        let resolved = url.resolvingSymlinksInPath().path
-        let standardized = url.standardized.path
-        if resolved != standardized {
-            Logger.switching.error("[Script] rejected: intermediate symlink \(path, privacy: .public) -> \(resolved, privacy: .public)")
-            return false
-        }
-        guard let attrs = try? fm.attributesOfItem(atPath: path),
-              let owner = attrs[.ownerAccountName] as? String else {
-            Logger.switching.error("[Script] rejected: cannot determine owner \(path, privacy: .public)")
-            return false
-        }
-        let currentUser = NSUserName()
-        guard owner == currentUser else {
-            Logger.switching.error("[Script] rejected: owner \(owner, privacy: .public) != \(currentUser, privacy: .public)")
-            return false
-        }
-        return true
-    }
-
-    func runUserScript(_ sampleRate: Float64, bitDepth: Int?) {
-        let livePath = UserDefaults.standard.string(forKey: "KeyShellScriptPath")
-        guard let scriptPath = livePath ?? Defaults.shared.shellScriptPath else { return }
-        guard Self.isValidUserScript(at: scriptPath) else {
-            Logger.switching.error("[Script] validation failed, not executing \(scriptPath, privacy: .public)")
-            if livePath != nil {
-                UserDefaults.standard.removeObject(forKey: "KeyShellScriptPath")
-                DispatchQueue.main.async { Defaults.shared.shellScriptPath = nil }
-            }
-            return
-        }
-        let argumentSampleRate = String(Int(sampleRate))
-        var arguments = [argumentSampleRate]
-        
-        // Add bit depth as second argument if available
-        if let bitDepth = bitDepth {
-            arguments.append(String(bitDepth))
-        }
-        
-        Task.detached {
-            let scriptURL = URL(fileURLWithPath: scriptPath)
-            do {
-                let task = try NSUserUnixTask(url: scriptURL)
-                try await task.execute(withArguments: arguments)
-            }
-            catch {
-                Logger.switching.info("TASK ERR \(error)")
-            }
-        }
-    }
-    
     /// Re-evaluates the currently playing track immediately. Called when
     /// the user changes the monitoring source while something is already
     /// playing - without this, no new MediaRemote event would arrive and
@@ -1092,7 +781,7 @@ class OutputDevices: ObservableObject {
                     return
                 }
                 Logger.switching.info("[Reevaluate] re-evaluating switch for \(bundleID ?? "?")")
-                self.trackDidChange(trackInfo)
+                self.handleTrackDidChange(trackInfo, eventDate: nil)
             }
         }
     }
@@ -1112,6 +801,12 @@ class OutputDevices: ObservableObject {
     }
 
     func trackDidChange(_ newTrack: TrackInfo, eventDate: Date? = nil) {
+        processQueue.async { [weak self] in
+            self?.handleTrackDidChange(newTrack, eventDate: eventDate)
+        }
+    }
+
+    private func handleTrackDidChange(_ newTrack: TrackInfo, eventDate: Date?) {
         self.previousTrack = self.currentTrack
         self.currentTrack = MediaTrack(trackInfo: newTrack)
         if self.previousTrack != self.currentTrack {
@@ -1141,15 +836,11 @@ class OutputDevices: ObservableObject {
             // (Apple Music only; no-op unless the auto-EQ switch is on).
             // The dedupe is intentionally NOT reset here: tracks mapping to
             // the same preset must not re-open the EQ window.
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.applyAppleMusicEQIfNeeded()
-            }
+            self.scheduleAppleMusicEQUpdate()
         }
         // Snapshot the track this task was scheduled for, so the stale-task guard
         // in switchLatestSampleRate can discard it if the track changes first.
         let trackSnapshot = MediaTrack(trackInfo: newTrack)
-        processQueue.async { [unowned self] in
-            self.switchLatestSampleRate(for: trackSnapshot)
-        }
+        self.switchLatestSampleRate(for: trackSnapshot)
     }
 }

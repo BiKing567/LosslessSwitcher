@@ -62,42 +62,30 @@ enum MediaRemoteSampleRateProbe {
             completion(nil, nil)
             return
         }
-        var didComplete = false
-        let lock = NSLock()
-        func completeOnce(_ sampleRate: Double?, _ bitDepth: Int?) {
-            lock.lock()
-            if didComplete {
-                lock.unlock()
-                return
-            }
-            didComplete = true
-            lock.unlock()
-            completion(sampleRate, bitDepth)
+        let completeOnce = OneShotCompletion<(Double?, Int?)> {
+            completion($0.0, $0.1)
         }
         // Timeout guard (1.0 s): treat a silent private-API callback as
         // "no data" so the caller's fallback chain keeps running.
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.0) {
-            completeOnce(nil, nil)
+            completeOnce.complete((nil, nil))
         }
         let queue = DispatchQueue.global(qos: .userInitiated)
         getNowPlayingInfo(queue) { dict in
             guard let dict = dict as? [String: Any] else {
-                completeOnce(nil, nil)
+                completeOnce.complete((nil, nil))
                 return
             }
             // When we know which app triggered the event, verify it is still
             // the active player before trusting its audio format keys.
             guard let getNowPlayingApplicationPID else {
-                completeOnce(
-                    (dict[kSampleRate] as? NSNumber)?.doubleValue,
-                    (dict[kBitDepth] as? NSNumber)?.intValue
-                )
+                completeOnce.complete(((dict[kSampleRate] as? NSNumber)?.doubleValue, (dict[kBitDepth] as? NSNumber)?.intValue))
                 return
             }
             getNowPlayingApplicationPID(queue) { activePID in
                 if let expectedPID, activePID != expectedPID {
                     Logger.switching.info("[MRProbe] active player PID \(activePID) != event PID \(expectedPID), ignoring")
-                    completeOnce(nil, nil)
+                    completeOnce.complete((nil, nil))
                     return
                 }
                 let sampleRate = (dict[kSampleRate] as? NSNumber)?.doubleValue
@@ -105,7 +93,7 @@ enum MediaRemoteSampleRateProbe {
                 if sampleRate != nil || bitDepth != nil {
                     Logger.switching.info("[MRProbe] sampleRate=\(sampleRate ?? -1) bitDepth=\(bitDepth ?? -1)")
                 }
-                completeOnce(sampleRate, bitDepth)
+                completeOnce.complete((sampleRate, bitDepth))
             }
         }
     }
@@ -127,34 +115,23 @@ enum MediaRemoteSampleRateProbe {
             completion(nil)
             return
         }
-        var didComplete = false
-        let lock = NSLock()
-        func completeOnce(_ info: TrackInfo?) {
-            lock.lock()
-            if didComplete {
-                lock.unlock()
-                return
-            }
-            didComplete = true
-            lock.unlock()
-            completion(info)
-        }
+        let completeOnce = OneShotCompletion<TrackInfo?>(completion)
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 1.5) {
-            completeOnce(nil)
+            completeOnce.complete(nil)
         }
         let queue = DispatchQueue.global(qos: .userInitiated)
         getNowPlayingInfo(queue) { dict in
             guard let dict = dict as? [String: Any] else {
-                completeOnce(nil)
+                completeOnce.complete(nil)
                 return
             }
             guard let getNowPlayingApplicationPID else {
-                completeOnce(nil)
+                completeOnce.complete(nil)
                 return
             }
             getNowPlayingApplicationPID(queue) { pid in
                 guard pid > 0 else {
-                    completeOnce(nil)
+                    completeOnce.complete(nil)
                     return
                 }
                 let app = NSRunningApplication(processIdentifier: pid)
@@ -165,7 +142,7 @@ enum MediaRemoteSampleRateProbe {
                     bundleIdentifier: app?.bundleIdentifier,
                     PID: pid
                 )
-                completeOnce(TrackInfo(payload: payload))
+                completeOnce.complete(TrackInfo(payload: payload))
             }
         }
     }

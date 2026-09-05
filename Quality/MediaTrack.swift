@@ -25,7 +25,7 @@ struct MediaTrack: Equatable, Hashable {
         self.id = payload.uniqueIdentifier
         self.bundleIdentifier = payload.bundleIdentifier
         self.pid = payload.PID
-        self.isMusicApp = (payload.bundleIdentifier == Defaults.appleMusicBundleIdentifier)
+        self.isMusicApp = (payload.bundleIdentifier == PlayerProfile.appleMusic.bundleIdentifier)
         self.title = payload.title
         self.album = payload.album
         self.artist = payload.artist
