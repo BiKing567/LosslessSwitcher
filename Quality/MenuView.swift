@@ -76,7 +76,7 @@ struct MenuView: View {
                         if defaults.monitoredBundleIdentifier == profile.bundleIdentifier {
                             Image(systemName: "checkmark")
                         }
-                        Text(verbatim: profile.displayName)
+                        Text(LocalizedStringKey(profile.localizationKey))
                     }
                 }
 

@@ -45,6 +45,18 @@
 		BFA0001E2E10000100320001 /* OneShotCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0001C2E10000100320001 /* OneShotCompletion.swift */; };
 		BFA000152E10000100320001 /* RateSwitchingPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000012E10000100320001 /* RateSwitchingPolicy.swift */; };
 		BFA000162E10000100320001 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BFA000062E10000100320001 /* XCTest.framework */; };
+		BFA000202E10000100320001 /* SharedAudioFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000222E10000100320001 /* SharedAudioFormat.swift */; };
+		BFA000212E10000100320001 /* SharedAudioFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000222E10000100320001 /* SharedAudioFormat.swift */; };
+		BFA000232E10000100320001 /* RateSyncWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000272E10000100320001 /* RateSyncWidget.swift */; };
+		BFA000242E10000100320001 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BFA000292E10000100320001 /* WidgetKit.framework */; };
+		BFA000252E10000100320001 /* SharedAudioFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000222E10000100320001 /* SharedAudioFormat.swift */; };
+		BFA000262E10000100320001 /* RateSyncWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = BFA000282E10000100320001 /* RateSyncWidget.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		BFA000362E10000100320001 /* CurrentOutputAudioFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA000372E10000100320001 /* CurrentOutputAudioFormat.swift */; };
+		BFA000382E10000100320001 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BFA000392E10000100320001 /* CoreAudio.framework */; };
+		BFA0003A2E10000100320001 /* TrackEventIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0003C2E10000100320001 /* TrackEventIdentity.swift */; };
+		BFA0003B2E10000100320001 /* TrackEventIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0003C2E10000100320001 /* TrackEventIdentity.swift */; };
+		BFA0003F2E10000100320001 /* AppleMusicFormatParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0003E2E10000100320001 /* AppleMusicFormatParser.swift */; };
+		BFA000402E10000100320001 /* AppleMusicFormatParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0003E2E10000100320001 /* AppleMusicFormatParser.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -57,6 +69,17 @@
 				BF342D7D2E0937D20032F398 /* MediaRemoteAdapter in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BFA0002D2E10000100320001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BFA000262E10000100320001 /* RateSyncWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -97,6 +120,16 @@
 		BFA000172E10000100320001 /* SwitchingSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchingSupportTests.swift; sourceTree = "<group>"; };
 		BFA000192E10000100320001 /* PlayerProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProfile.swift; sourceTree = "<group>"; };
 		BFA0001C2E10000100320001 /* OneShotCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneShotCompletion.swift; sourceTree = "<group>"; };
+		BFA000222E10000100320001 /* SharedAudioFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAudioFormat.swift; sourceTree = "<group>"; };
+		BFA000272E10000100320001 /* RateSyncWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateSyncWidget.swift; sourceTree = "<group>"; };
+		BFA000282E10000100320001 /* RateSyncWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RateSyncWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFA000292E10000100320001 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		BFA0002A2E10000100320001 /* RateSyncWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RateSyncWidget.entitlements; sourceTree = "<group>"; };
+		BFA000352E10000100320001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		BFA000372E10000100320001 /* CurrentOutputAudioFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentOutputAudioFormat.swift; sourceTree = "<group>"; };
+		BFA000392E10000100320001 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		BFA0003C2E10000100320001 /* TrackEventIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackEventIdentity.swift; sourceTree = "<group>"; };
+		BFA0003E2E10000100320001 /* AppleMusicFormatParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicFormatParser.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -119,6 +152,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BFA0002E2E10000100320001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BFA000382E10000100320001 /* CoreAudio.framework in Frameworks */,
+				BFA000242E10000100320001 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -134,6 +176,7 @@
 			children = (
 				1272AA96280DBB4900FD72BA /* Quality */,
 				BFA000072E10000100320001 /* RateSyncTests */,
+				BFA0002B2E10000100320001 /* RateSyncWidget */,
 				1272AA95280DBB4900FD72BA /* Products */,
 				1234F4FD281E80A2007EC9F5 /* Frameworks */,
 			);
@@ -144,6 +187,7 @@
 			children = (
 				1272AA94280DBB4900FD72BA /* RateSync.app */,
 				BFA000052E10000100320001 /* RateSyncTests.xctest */,
+				BFA000282E10000100320001 /* RateSyncWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -170,11 +214,14 @@
 				BFA000032E10000100320001 /* UserScriptRunner.swift */,
 				BFA000192E10000100320001 /* PlayerProfile.swift */,
 				BFA0001C2E10000100320001 /* OneShotCompletion.swift */,
+				BFA000222E10000100320001 /* SharedAudioFormat.swift */,
 				1293436A28131591002E19A8 /* CurrentUser.swift */,
 				1254A79B2813FB9400241107 /* Defaults.swift */,
 				1234F50D281E8F07007EC9F5 /* MediaTrack.swift */,
 				1234F50F281E9520007EC9F5 /* MediaRemoteController.swift */,
 				BF5A88A02E0F00000032F001 /* MediaRemoteSampleRateProbe.swift */,
+				BFA0003C2E10000100320001 /* TrackEventIdentity.swift */,
+				BFA0003E2E10000100320001 /* AppleMusicFormatParser.swift */,
 				127C972C281FCF000087313B /* AppVersion.swift */,
 				BF7E0D08296336DA009FFEEC /* AudioStreamBasicDescription+Equatable.swift */,
 				BF0C90C92B20C163002F99C9 /* ScriptableApplicationCommand.swift */,
@@ -201,6 +248,17 @@
 			path = RateSyncTests;
 			sourceTree = "<group>";
 		};
+		BFA0002B2E10000100320001 /* RateSyncWidget */ = {
+			isa = PBXGroup;
+			children = (
+				BFA000372E10000100320001 /* CurrentOutputAudioFormat.swift */,
+				BFA000272E10000100320001 /* RateSyncWidget.swift */,
+				BFA0002A2E10000100320001 /* RateSyncWidget.entitlements */,
+				BFA000352E10000100320001 /* Info.plist */,
+			);
+			path = RateSyncWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -212,10 +270,12 @@
 				1272AA91280DBB4900FD72BA /* Frameworks */,
 				1272AA92280DBB4900FD72BA /* Resources */,
 				BF342D7E2E0937D20032F398 /* Embed Frameworks */,
+				BFA0002D2E10000100320001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BFA000342E10000100320001 /* PBXTargetDependency */,
 			);
 			name = RateSync;
 			packageProductDependencies = (
@@ -244,7 +304,33 @@
 			productReference = BFA000052E10000100320001 /* RateSyncTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		BFA0002C2E10000100320001 /* RateSyncWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BFA000322E10000100320001 /* Build configuration list for PBXNativeTarget "RateSyncWidget" */;
+			buildPhases = (
+				BFA0002F2E10000100320001 /* Sources */,
+				BFA0002E2E10000100320001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RateSyncWidget;
+			productName = RateSyncWidget;
+			productReference = BFA000282E10000100320001 /* RateSyncWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXContainerItemProxy section */
+		BFA000332E10000100320001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1272AA8C280DBB4900FD72BA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BFA0002C2E10000100320001;
+			remoteInfo = RateSyncWidget;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXProject section */
 		1272AA8C280DBB4900FD72BA /* Project object */ = {
@@ -259,6 +345,9 @@
 					};
 					BFA000092E10000100320001 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					BFA0002C2E10000100320001 = {
+						CreatedOnToolsVersion = 26.4;
 					};
 				};
 			};
@@ -284,6 +373,7 @@
 			targets = (
 				1272AA93280DBB4900FD72BA /* RateSync */,
 				BFA000092E10000100320001 /* RateSyncTests */,
+				BFA0002C2E10000100320001 /* RateSyncWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -330,6 +420,9 @@
 				BFA000132E10000100320001 /* UserScriptRunner.swift in Sources */,
 				BFA0001A2E10000100320001 /* PlayerProfile.swift in Sources */,
 				BFA0001D2E10000100320001 /* OneShotCompletion.swift in Sources */,
+				BFA000202E10000100320001 /* SharedAudioFormat.swift in Sources */,
+				BFA0003A2E10000100320001 /* TrackEventIdentity.swift in Sources */,
+				BFA0003F2E10000100320001 /* AppleMusicFormatParser.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -342,10 +435,31 @@
 				BFA0001B2E10000100320001 /* PlayerProfile.swift in Sources */,
 				BFA0001E2E10000100320001 /* OneShotCompletion.swift in Sources */,
 				BFA000152E10000100320001 /* RateSwitchingPolicy.swift in Sources */,
+				BFA000212E10000100320001 /* SharedAudioFormat.swift in Sources */,
+				BFA0003B2E10000100320001 /* TrackEventIdentity.swift in Sources */,
+				BFA000402E10000100320001 /* AppleMusicFormatParser.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BFA0002F2E10000100320001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+				files = (
+				BFA000362E10000100320001 /* CurrentOutputAudioFormat.swift in Sources */,
+				BFA000232E10000100320001 /* RateSyncWidget.swift in Sources */,
+				BFA000252E10000100320001 /* SharedAudioFormat.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BFA000342E10000100320001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BFA0002C2E10000100320001 /* RateSyncWidget */;
+			targetProxy = BFA000332E10000100320001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		BF9900032E0999990032F001 /* Localizable.strings */ = {
@@ -481,7 +595,7 @@
 				CODE_SIGN_ENTITLEMENTS = Quality/Quality.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_ASSET_PATHS = "\"Quality/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -516,7 +630,7 @@
 				CODE_SIGN_ENTITLEMENTS = Quality/Quality.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 29;
 				DEVELOPMENT_ASSET_PATHS = "\"Quality/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -567,6 +681,44 @@
 			};
 			name = Release;
 		};
+		BFA000302E10000100320001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = RateSyncWidget/RateSyncWidget.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 29;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RateSyncWidget/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSync.Widget";
+				PRODUCT_NAME = RateSyncWidget;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		BFA000312E10000100320001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = RateSyncWidget/RateSyncWidget.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 29;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RateSyncWidget/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSync.Widget";
+				PRODUCT_NAME = RateSyncWidget;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -593,6 +745,15 @@
 			buildConfigurations = (
 				BFA0000C2E10000100320001 /* Debug */,
 				BFA0000D2E10000100320001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BFA000322E10000100320001 /* Build configuration list for PBXNativeTarget "RateSyncWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BFA000302E10000100320001 /* Debug */,
+				BFA000312E10000100320001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

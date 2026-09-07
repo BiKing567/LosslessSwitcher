@@ -11,6 +11,7 @@ import Foundation
 enum RateSource {
     case mediaRemoteProbe
     case appleMusicPriority
+    case appleMusicFormatLog
     case decoderLog
     case audioQueueLog
     case staleAudioQueueLog
@@ -23,7 +24,8 @@ struct RateGatePolicy {
     let lockedOverride: TimeInterval
 
     static let standard = RateGatePolicy(boundary: 3.5, stability: 2.0, lockedOverride: 12.0)
-    static let audioQueue = RateGatePolicy(boundary: 0, stability: 0.6, lockedOverride: 12.0)
+    static let appleMusicFormat = RateGatePolicy(boundary: 1.0, stability: 0.6, lockedOverride: 2.0)
+    static let audioQueue = RateGatePolicy(boundary: 0, stability: 0.6, lockedOverride: 0.6)
 }
 
 enum RateSwitchingPolicy {
@@ -34,6 +36,8 @@ enum RateSwitchingPolicy {
         switch source {
         case .audioQueueLog:
             return .audioQueue
+        case .appleMusicFormatLog:
+            return .appleMusicFormat
         case .staleAudioQueueLog, .mediaRemoteProbe, .appleMusicPriority, .decoderLog, .preset:
             return .standard
         }
@@ -51,6 +55,19 @@ enum AppleMusicPriorityPolicy {
     ) -> Bool {
         monitoredBundleIdentifier == nil
             && sourceBundleIdentifier != PlayerProfile.appleMusic.bundleIdentifier
+    }
+}
+
+enum AppleMusicFormatPolicy {
+    static func shouldUseAppleScriptFallback(hasKnownFormat: Bool) -> Bool {
+        !hasKnownFormat
+    }
+
+    static func shouldReplaceCachedFormat(
+        currentIsDolbyAtmos: Bool,
+        incomingIsDolbyAtmos: Bool
+    ) -> Bool {
+        !currentIsDolbyAtmos || incomingIsDolbyAtmos
     }
 }
 

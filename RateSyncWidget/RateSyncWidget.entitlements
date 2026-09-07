@@ -6,7 +6,7 @@
 	<array>
 		<string>group.com.biking.RateSync</string>
 	</array>
-	<key>com.apple.security.automation.apple-events</key>
+	<key>com.apple.security.app-sandbox</key>
 	<true/>
 </dict>
 </plist>

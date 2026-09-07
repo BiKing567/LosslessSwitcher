@@ -35,6 +35,7 @@ class MenuBarController {
         // it through the normal track-change path, so switching starts
         // without waiting for the next track change.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            outputDevices.refreshWidgetTimelineOnLaunch()
             outputDevices.reevaluateNowPlaying()
         }
     }

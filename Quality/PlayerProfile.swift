@@ -7,37 +7,39 @@ struct PlayerProfile: Equatable, Identifiable {
     }
 
     let bundleIdentifier: String
-    let displayName: String
+    let localizationKey: String
     let processName: String
     let formatDetection: FormatDetection
     let fallbackSampleRate: Double?
+
+    var displayName: String { localizationKey }
 
     var id: String { bundleIdentifier }
 
     static let appleMusic = PlayerProfile(
         bundleIdentifier: "com.apple.Music",
-        displayName: "Apple Music",
+        localizationKey: "Apple Music",
         processName: "Music",
         formatDetection: .mediaRemoteThenLogs,
         fallbackSampleRate: nil
     )
     static let spotify = PlayerProfile(
         bundleIdentifier: "com.spotify.client",
-        displayName: "Spotify",
+        localizationKey: "Spotify",
         processName: "Spotify",
         formatDetection: .mediaRemoteThenLogs,
         fallbackSampleRate: 44_100
     )
     static let neteaseMusic = PlayerProfile(
         bundleIdentifier: "com.netease.163music",
-        displayName: "NetEase Music",
+        localizationKey: "NetEase Music",
         processName: "NeteaseMusic",
         formatDetection: .audioQueueLogs,
         fallbackSampleRate: nil
     )
     static let qqMusic = PlayerProfile(
         bundleIdentifier: "com.tencent.QQMusicMac",
-        displayName: "QQ Music",
+        localizationKey: "QQ Music",
         processName: "QQMusic",
         formatDetection: .audioQueueLogs,
         fallbackSampleRate: nil

@@ -102,6 +102,8 @@ enum MediaRemoteSampleRateProbe {
     private static let kTitle = "kMRMediaRemoteNowPlayingInfoTitle"
     private static let kArtist = "kMRMediaRemoteNowPlayingInfoArtist"
     private static let kAlbum = "kMRMediaRemoteNowPlayingInfoAlbum"
+    private static let kArtworkData = "kMRMediaRemoteNowPlayingInfoArtworkData"
+    private static let kArtworkMimeType = "kMRMediaRemoteNowPlayingInfoArtworkMIMEType"
     private static let kIsPlaying = "kMRMediaRemoteNowPlayingInfoPlaybackRate"
 
     /// Fetches a TrackInfo snapshot of whatever is currently playing,
@@ -135,11 +137,20 @@ enum MediaRemoteSampleRateProbe {
                     return
                 }
                 let app = NSRunningApplication(processIdentifier: pid)
+                let artworkDataBase64: String?
+                if let artworkData = dict[kArtworkData] as? NSData,
+                   artworkData.length <= RateSyncWidgetConfiguration.maxArtworkDataBytes {
+                    artworkDataBase64 = artworkData.base64EncodedString(options: [])
+                } else {
+                    artworkDataBase64 = nil
+                }
                 let payload = TrackInfo.Payload(
                     title: dict[kTitle] as? String,
                     artist: dict[kArtist] as? String,
                     album: dict[kAlbum] as? String,
                     bundleIdentifier: app?.bundleIdentifier,
+                    artworkDataBase64: artworkDataBase64,
+                    artworkMimeType: dict[kArtworkMimeType] as? String,
                     PID: pid
                 )
                 completeOnce.complete(TrackInfo(payload: payload))

@@ -9,24 +9,39 @@ set -euo pipefail
 PROJ_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_NAME="RateSync"
 VERSION="3.1.0"
-BUILD="11"
+BUILD="29"
 OUT="${1:-$PROJ_DIR/RateSync-$VERSION.dmg}"
 
 BUILD_STAGING="$(mktemp -d /tmp/lossless-dragdrop-build-XXXXXX)"
 trap 'rm -rf "$BUILD_STAGING"' EXIT
 
 APP="$BUILD_STAGING/Applications/$APP_NAME.app"
+BUILD_PRODUCT="$BUILD_STAGING/DerivedData/Build/Products/Release/$APP_NAME.app"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
-# create-dmg 固定工作目录（含 package.json 与 node_modules，复用 Moongate 已装好的 8.1.0）
-DMG_TOOL_DIR="/Users/manfred/code/projects/Moon/tools/dmg"
+# create-dmg 必须来自显式指定或工程内的受信任目录，避免执行固定用户目录下的依赖。
+DMG_TOOL_DIR="${RATESYNC_DMG_TOOL_DIR:-$PROJ_DIR/.dmg-tools}"
+SOURCE_PACKAGES_DIR="${RATESYNC_SOURCE_PACKAGES_DIR:-}"
+if [[ -z "$SOURCE_PACKAGES_DIR" ]]; then
+    echo "==> 错误：打包必须显式设置 RATESYNC_SOURCE_PACKAGES_DIR" >&2
+    exit 1
+fi
+if [[ ! -d "$SOURCE_PACKAGES_DIR" ]]; then
+    echo "==> 错误：找不到 Swift Package 缓存，请设置 RATESYNC_SOURCE_PACKAGES_DIR" >&2
+    exit 1
+fi
 
 # ---- 1. 构建 App（Release，staging，不触碰本机 /Applications）----
 echo "==> 构建 ${APP_NAME}（Release）到 staging"
 mkdir -p "$BUILD_STAGING/Applications"
 xcodebuild -project "$PROJ_DIR/Quality.xcodeproj" -scheme RateSync -configuration Release \
   -derivedDataPath "$BUILD_STAGING/DerivedData" \
+  -clonedSourcePackagesDirPath "$SOURCE_PACKAGES_DIR" \
   CODE_SIGNING_ALLOWED=NO -disableAutomaticPackageResolution build > "$BUILD_STAGING/build.log" 2>&1
-cp -R "$BUILD_STAGING/DerivedData/Build/Products/Release/$APP_NAME.app" "$APP"
+if [[ -x "$LSREGISTER" ]]; then
+    "$LSREGISTER" -u "$BUILD_PRODUCT" >/dev/null 2>&1 || true
+fi
+cp -R "$BUILD_PRODUCT" "$APP"
 
 # ---- 2. 校验 build 产物 ----
 if [[ ! -d "$APP" ]]; then
@@ -38,11 +53,59 @@ fi
 # 未签名/ad-hoc 签名 app 的辅助功能授权绑定二进制指纹，每次重新构建
 # 都会失效（表现为"每次重启权限都掉"）。使用固定的自签名证书签名后，
 # 授权按证书身份 + bundle id 记录，重新构建/更新不再丢失。
-# 证书：自签名 "RateSync Developer"（已导入本机登录钥匙串）
-SIGN_IDENTITY="${RATESYNC_SIGN_IDENTITY:-RateSync Developer}"
-echo "==> 证书签名 ${APP_NAME}（身份：${SIGN_IDENTITY}）"
-codesign --force --deep -s "$SIGN_IDENTITY" "$APP" || { echo "==> 错误：签名失败" >&2; exit 1; }
-codesign -dv "$APP" 2>&1 | grep -E "Signature|Authority" | head -3
+# 发布签名必须显式指定；本地测试可用 RATESYNC_SKIP_SIGNING=1 生成无签名 DMG。
+SIGN_IDENTITY="${RATESYNC_SIGN_IDENTITY:-}"
+SKIP_SIGNING="${RATESYNC_SKIP_SIGNING:-0}"
+WIDGET_EXTENSION="$APP/Contents/PlugIns/RateSyncWidget.appex"
+
+if [[ ! -d "$WIDGET_EXTENSION" ]]; then
+    echo "==> 错误：缺少 RateSyncWidget.appex" >&2
+    exit 1
+fi
+
+if [[ "$SKIP_SIGNING" == "1" ]]; then
+    echo "==> 警告：RATESYNC_SKIP_SIGNING=1，仅生成本机测试包，不可分发"
+else
+    if [[ -z "$SIGN_IDENTITY" ]]; then
+        echo "==> 错误：发布打包必须设置 RATESYNC_SIGN_IDENTITY；测试包才可设置 RATESYNC_SKIP_SIGNING=1" >&2
+        exit 1
+    fi
+    IDENTITY_LIST="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+    if ! printf '%s\n' "$IDENTITY_LIST" | rg -qF -- "$SIGN_IDENTITY"; then
+        echo "==> 错误：签名身份不可用：$SIGN_IDENTITY" >&2
+        printf '%s\n' "$IDENTITY_LIST" >&2
+        exit 1
+    fi
+    echo "==> 证书签名 ${APP_NAME}（身份：${SIGN_IDENTITY}）"
+    if [[ -d "$APP/Contents/Frameworks" ]]; then
+        while IFS= read -r -d '' embedded_framework; do
+            codesign --force -s "$SIGN_IDENTITY" "$embedded_framework" || {
+                echo "==> 错误：内嵌框架签名失败：$embedded_framework" >&2
+                exit 1
+            }
+        done < <(find "$APP/Contents/Frameworks" -depth \( -type d -name '*.framework' -o -type f -name '*.dylib' \) -print0)
+    fi
+    codesign --force -s "$SIGN_IDENTITY" \
+        --entitlements "$PROJ_DIR/RateSyncWidget/RateSyncWidget.entitlements" \
+        "$WIDGET_EXTENSION" || { echo "==> 错误：Widget 扩展签名失败" >&2; exit 1; }
+    codesign --force -s "$SIGN_IDENTITY" \
+        --entitlements "$PROJ_DIR/Quality/Quality.entitlements" \
+        "$APP" || { echo "==> 错误：App 签名失败" >&2; exit 1; }
+    codesign -dv "$APP" 2>&1 | grep -E "Signature|Authority" | head -3
+
+    verify_entitlement_value() {
+        local bundle_path="$1"
+        local expected_value="$2"
+        if ! codesign -d --entitlements - "$bundle_path" 2>/dev/null | rg -qF -- "$expected_value"; then
+            echo "==> 错误：$bundle_path 缺少签名 entitlement：$expected_value" >&2
+            exit 1
+        fi
+    }
+
+    verify_entitlement_value "$WIDGET_EXTENSION" "[Key] com.apple.security.app-sandbox"
+    verify_entitlement_value "$WIDGET_EXTENSION" "[Bool] true"
+    codesign --verify --deep --strict "$APP"
+fi
 
 # ---- 3. 检查 node / npm ----
 echo "==> 检查 node / npm 环境"
@@ -51,24 +114,11 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
     exit 1
 fi
 
-# ---- 4. 初始化 create-dmg 工作目录并安装依赖（缺失时才装）----
+# ---- 4. 检查 create-dmg 工作目录（不自动安装依赖）----
 echo "==> 检查 create-dmg 工作目录：$DMG_TOOL_DIR"
-if [[ ! -f "$DMG_TOOL_DIR/package.json" ]]; then
-    mkdir -p "$DMG_TOOL_DIR"
-    cat > "$DMG_TOOL_DIR/package.json" <<'JSON'
-{
-  "name": "lossless-dmg",
-  "version": "1.0.0",
-  "private": true,
-  "dependencies": {
-    "create-dmg": "^8.1.0"
-  }
-}
-JSON
-fi
-if [[ ! -d "$DMG_TOOL_DIR/node_modules" ]]; then
-    echo "==> 安装 create-dmg 依赖（npm install）"
-    (cd "$DMG_TOOL_DIR" && npm install --no-fund --no-audit)
+if [[ ! -f "$DMG_TOOL_DIR/package.json" || ! -x "$DMG_TOOL_DIR/node_modules/.bin/create-dmg" ]]; then
+    echo "==> 错误：找不到受信任的 create-dmg，请设置 RATESYNC_DMG_TOOL_DIR 指向已安装且锁定依赖的目录" >&2
+    exit 1
 fi
 
 # ---- 5. patch macos-alias（幂等）：修复 APFS 卷名为空导致 Finder 背景不显示 ----
@@ -86,18 +136,19 @@ fi
 
 # ---- 6. 确保卷名不冲突（避免 hdiutil 自动改名导致 alias 卷名不匹配）----
 if [[ -d "/Volumes/$APP_NAME" ]]; then
-    echo "==> 卸载已挂载的 /Volumes/${APP_NAME}（避免卷名冲突）"
-    hdiutil detach "/Volumes/$APP_NAME" || diskutil eject "/Volumes/$APP_NAME"
+    echo "==> 错误：/Volumes/${APP_NAME} 已被占用，为避免误卸载外部磁盘，请先手动卸载后重试" >&2
+    exit 1
 fi
 
 # ---- 7. 用 create-dmg 打包 ----
 OUT_DIR="$(dirname "$OUT")"
 mkdir -p "$OUT_DIR"
+DMG_CREATED="$OUT_DIR/$APP_NAME $VERSION.dmg"
+touch "$DMG_CREATED"
 echo "==> 生成 DMG（create-dmg，卷名 ${APP_NAME}）"
 "$DMG_TOOL_DIR/node_modules/.bin/create-dmg" --overwrite --no-code-sign --dmg-title="$APP_NAME" "$APP" "$OUT_DIR"
 
 # ---- 8. 重命名为目标名 ----
-DMG_CREATED="$OUT_DIR/$APP_NAME $VERSION.dmg"
 if [[ -f "$DMG_CREATED" && "$DMG_CREATED" != "$OUT" ]]; then
     echo "==> 重命名为：$OUT"
     rm -f "$OUT"
@@ -109,8 +160,8 @@ echo "    （分发到其他 Mac：首次打开需右键 → 打开，或先执�
 echo "      xattr -dr com.apple.quarantine \"/Applications/$APP_NAME.app\"）"
 
 # ── Sparkle 签名（应用内更新）────────────────────────────
-SIGN_UPDATE="${SPARKLE_SIGN_UPDATE:-/tmp/sparkle-tools/Build/Products/Release/sign_update}"
-if [ -x "$SIGN_UPDATE" ]; then
+SIGN_UPDATE="${SPARKLE_SIGN_UPDATE:-}"
+if [[ -n "$SIGN_UPDATE" && -x "$SIGN_UPDATE" ]]; then
     SIG_OUT="$("$SIGN_UPDATE" "$OUT")"
     SIG="$(printf '%s' "$SIG_OUT" | sed -E 's/^sparkle:edSignature="([^"]+)".*/\1/')"
     LEN="$(printf '%s' "$SIG_OUT" | sed -E 's/.*length="([0-9]+)".*/\1/')"

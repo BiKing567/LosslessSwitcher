@@ -13,15 +13,45 @@ struct CMPlayerStats {
     let sampleRate: Double // Hz
     let bitDepth: Int
     let date: Date
+    let isAppleMusicFormat: Bool
+    let isDolbyAtmos: Bool
+
+    init(
+        sampleRate: Double,
+        bitDepth: Int,
+        date: Date,
+        isAppleMusicFormat: Bool = false,
+        isDolbyAtmos: Bool = false
+    ) {
+        self.sampleRate = sampleRate
+        self.bitDepth = bitDepth
+        self.date = date
+        self.isAppleMusicFormat = isAppleMusicFormat
+        self.isDolbyAtmos = isDolbyAtmos
+    }
 }
 
 extension CMPlayerStats: CustomStringConvertible {
     var description: String {
-        return "CMPlayerStats(sampleRate: \(sampleRate), bitDepth: \(bitDepth))"
+        return "CMPlayerStats(sampleRate: \(sampleRate), bitDepth: \(bitDepth), appleMusicFormat: \(isAppleMusicFormat), dolbyAtmos: \(isDolbyAtmos))"
     }
 }
 
 class CMPlayerParser {
+    static func parseAppleMusicConsoleLogs(_ entries: [SimpleConsole]) -> [CMPlayerStats] {
+        let logEntries = entries.map { AppleMusicLogEntry(date: $0.date, message: $0.message) }
+        let highLevelStats = AppleMusicFormatParser.parse(logEntries).map { evidence in
+            CMPlayerStats(
+                sampleRate: evidence.sampleRate,
+                bitDepth: evidence.bitDepth ?? 24,
+                date: evidence.date,
+                isAppleMusicFormat: true,
+                isDolbyAtmos: evidence.isDolbyAtmos
+            )
+        }
+        return highLevelStats + parseCoreAudioConsoleLogs(entries)
+    }
+
     static func parseCoreAudioConsoleLogs(_ entries: [SimpleConsole]) -> [CMPlayerStats] {
         let kTimeDifferenceAcceptance = 5.0 // seconds
         var lastDate: Date?

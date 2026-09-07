@@ -22,14 +22,20 @@ struct SimpleConsole {
 
 enum EntryType: String {
     case coreAudio = "com.apple.coreaudio"
+    case appleMusic = "com.apple.Music"
 }
 
 class Console {
     static func getRecentEntries(type: EntryType, process: String = PlayerProfile.appleMusic.processName, durationSeconds: TimeInterval = 5.0) throws -> [SimpleConsole] {
+        try getRecentEntries(types: [type], process: process, durationSeconds: durationSeconds)
+    }
+
+    static func getRecentEntries(types: [EntryType], process: String, durationSeconds: TimeInterval) throws -> [SimpleConsole] {
         var messages = [SimpleConsole]()
         let store = try OSLogStore.local()
         let duration = store.position(timeIntervalSinceEnd: -durationSeconds)
-        let predicate = NSPredicate(format: "(subsystem = %@) AND (process = %@)", argumentArray: [type.rawValue, process])
+        let subsystems = types.map(\.rawValue)
+        let predicate = NSPredicate(format: "(subsystem IN %@) AND (process = %@)", argumentArray: [subsystems, process])
         let entries = try store.getEntries(with: [], at: duration, matching: predicate)
         for entry in entries {
             if let logEntry = entry as? OSLogEntryLog {
@@ -48,16 +54,16 @@ class Console {
         let pid = entry.processIdentifier
         guard pid > 0 else { return true }
         guard let app = NSRunningApplication(processIdentifier: pid) else {
-            return true
+            return false
         }
         let expectedBundle = PlayerProfile.bundleIdentifier(forProcessName: expectedProcess)
         if let expectedBundle {
             guard let actualBundle = app.bundleIdentifier, actualBundle == expectedBundle else {
                 return false
             }
-            return true
         }
-        if let execName = app.executableURL?.lastPathComponent, execName != expectedProcess {
+        guard let execName = app.executableURL?.lastPathComponent,
+              execName == expectedProcess else {
             return false
         }
         return true

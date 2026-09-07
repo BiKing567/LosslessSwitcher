@@ -12,6 +12,7 @@ import AppKit
 import SimplyCoreAudio
 import CoreAudioTypes
 import MediaRemoteAdapter
+import WidgetKit
 
 class OutputDevices: ObservableObject {
     @Published var selectedOutputDevice: AudioDevice? // auto if nil
@@ -28,6 +29,8 @@ class OutputDevices: ObservableObject {
     
     private var changesCancellable: AnyCancellable?
     private var defaultChangesCancellable: AnyCancellable?
+    private var nominalSampleRateChangesCancellable: AnyCancellable?
+    private var streamPhysicalFormatChangesCancellable: AnyCancellable?
     private var timerCancellable: AnyCancellable?
     private var outputSelectionCancellable: AnyCancellable?
     private var pollCancellable: AnyCancellable?
@@ -71,8 +74,11 @@ class OutputDevices: ObservableObject {
     private static let probeMissesBeforeSkip = 2
     private var trackAndSample = [MediaTrack : Float64]()
     private var trackAndBitDepth = [MediaTrack : Int]()
+    private var appleMusicFormatEvidence: CMPlayerStats?
     private var previousTrack: MediaTrack?
     private var currentTrack: MediaTrack?
+    private var pendingNowPlayingClear: DispatchWorkItem?
+    private static let nowPlayingClearGracePeriod: TimeInterval = 1.5
     
     var timerCalls = 0
     
@@ -96,6 +102,29 @@ class OutputDevices: ObservableObject {
                 self.defaultOutputDevice = self.coreAudio.defaultOutputDevice
                 self.getDeviceSampleRate()
             })
+
+        nominalSampleRateChangesCancellable =
+            NotificationCenter.default.publisher(for: .deviceNominalSampleRateDidChange).sink { [weak self] notification in
+                guard let self,
+                      let device = notification.object as? AudioDevice,
+                      let monitoredDevice = self.selectedOutputDevice ?? self.defaultOutputDevice,
+                      device.uid == monitoredDevice.uid else { return }
+                self.processQueue.async {
+                    self.refreshCurrentOutputFormat()
+                }
+            }
+
+        streamPhysicalFormatChangesCancellable =
+            NotificationCenter.default.publisher(for: .streamPhysicalFormatDidChange).sink { [weak self] notification in
+                guard let self,
+                      let stream = notification.object as? AudioStream,
+                      stream.scope == .output,
+                      let monitoredDevice = self.selectedOutputDevice ?? self.defaultOutputDevice,
+                      stream.owningDevice?.uid == monitoredDevice.uid else { return }
+                self.processQueue.async {
+                    self.refreshCurrentOutputFormat()
+                }
+            }
         
         outputSelectionCancellable = $selectedOutputDevice.sink(receiveValue: { _ in
             self.getDeviceSampleRate()
@@ -125,6 +154,8 @@ class OutputDevices: ObservableObject {
     deinit {
         changesCancellable?.cancel()
         defaultChangesCancellable?.cancel()
+        nominalSampleRateChangesCancellable?.cancel()
+        streamPhysicalFormatChangesCancellable?.cancel()
         timerCancellable?.cancel()
         pollCancellable?.cancel()
         enableBitDepthDetectionCancellable?.cancel()
@@ -170,11 +201,44 @@ class OutputDevices: ObservableObject {
     }
     
     func getDeviceSampleRate() {
-        let defaultDevice = self.selectedOutputDevice ?? self.defaultOutputDevice
-        guard let sampleRate = defaultDevice?.nominalSampleRate else { return }
         processQueue.async { [weak self] in
-            self?.updateSampleRate(sampleRate, bitDepth: nil)
+            self?.refreshCurrentOutputFormat()
         }
+    }
+
+    private func refreshCurrentOutputFormat() {
+        let device = selectedOutputDevice ?? defaultOutputDevice
+        guard let sampleRate = device?.nominalSampleRate,
+              sampleRate.isFinite,
+              sampleRate > 0 else {
+            previousSampleRate = nil
+            previousBitDepth = nil
+            RateSyncWidgetConfiguration.clearAudioFormat()
+            reloadWidgetTimeline(reason: "output format unavailable")
+            DispatchQueue.main.async { [weak self] in
+                self?.currentSampleRate = nil
+                self?.currentBitDepth = nil
+            }
+            return
+        }
+
+        let bitDepth = device?.streams(scope: .output)?.first?.physicalFormat
+            .map { Int($0.mBitsPerChannel) }
+            .flatMap { $0 > 0 ? $0 : nil }
+        let previousFormat = RateSyncWidgetConfiguration.loadAudioFormat()
+        let formatChanged = previousFormat?.sampleRate != sampleRate
+            || previousFormat?.bitDepth != bitDepth
+
+        DispatchQueue.main.async { [weak self] in
+            self?.currentSampleRate = sampleRate / 1_000
+            self?.currentBitDepth = bitDepth
+        }
+        previousSampleRate = sampleRate
+        previousBitDepth = bitDepth
+
+        guard formatChanged else { return }
+        RateSyncWidgetConfiguration.saveAudioFormat(sampleRate: sampleRate, bitDepth: bitDepth)
+        reloadWidgetTimeline(reason: "output format refreshed")
     }
 
     /// Resolves the playing app's bundle identifier, falling back to the
@@ -242,7 +306,8 @@ class OutputDevices: ObservableObject {
     private func scheduleSwitchForCurrentTrack() {
         processQueue.async { [weak self] in
             guard let self else { return }
-            self.switchLatestSampleRate(for: self.currentTrack)
+            guard let currentTrack = self.currentTrack else { return }
+            self.switchLatestSampleRate(for: currentTrack)
         }
     }
     
@@ -252,8 +317,11 @@ class OutputDevices: ObservableObject {
         var allStats = [CMPlayerStats]()
 
         do {
-            let coreAudioLogs = try Console.getRecentEntries(type: .coreAudio, process: process, durationSeconds: durationSeconds)
-            allStats.append(contentsOf: parser(coreAudioLogs))
+            let entryTypes: [EntryType] = process == PlayerProfile.appleMusic.processName
+                ? [.coreAudio, .appleMusic]
+                : [.coreAudio]
+            let logs = try Console.getRecentEntries(types: entryTypes, process: process, durationSeconds: durationSeconds)
+            allStats.append(contentsOf: parser(logs))
             Logger.switching.info("[getAllStats] \(allStats)")
         }
         catch {
@@ -280,8 +348,6 @@ class OutputDevices: ObservableObject {
         // Fast-path for NetEase / QQ: independent AudioQueue chain.
         // These apps never report NowPlaying sampleRate and do not need the
         // Apple Music priority dance (which costs AppleScript + 1.0s probe timeout).
-        // Bypassing both cuts ~1.0-1.5s off every switch, while AM keeps its
-        // full 3.5s/2.0s Atmos gate unchanged.
         if let profile = PlayerProfile.profile(for: Self.resolveBundleIdentifier(track: currentTrack)),
            profile.formatDetection == .audioQueueLogs {
             Logger.switching.info("[FastPath] \(profile.bundleIdentifier, privacy: .public) -> direct AudioQueue chain")
@@ -388,7 +454,22 @@ class OutputDevices: ObservableObject {
     /// MediaRemote probe reported nothing (or was skipped).
     private func runLogChain(expectedTrack: MediaTrack?, recursion: Bool) {
         let logStats = self.statsFromLogs(recursion: recursion)
+        if isAppleMusicSource {
+            rememberAppleMusicFormat(from: logStats)
+            if let appleMusicFormatEvidence {
+                applyStats(
+                    [appleMusicFormatEvidence],
+                    source: .appleMusicFormatLog,
+                    expectedTrack: expectedTrack,
+                    recursion: recursion
+                )
+                return
+            }
+        }
         if logStats.isEmpty, isAppleMusicSource, appleMusic.isRunning {
+            guard AppleMusicFormatPolicy.shouldUseAppleScriptFallback(hasKnownFormat: appleMusicFormatEvidence != nil) else {
+                return
+            }
             appleMusic.fetchPlaybackState { [weak self] state in
                 guard let self else { return }
                 self.processQueue.async {
@@ -428,11 +509,28 @@ class OutputDevices: ObservableObject {
             // The AudioQueue parser is the only log parser used for
             // non-Apple-Music processes; Apple Music's own decoder parser
             // feeds the log entries that the Atmos gate was designed for.
-            let source: RateSource = (Self.resolveProcessName(track: currentTrack) == PlayerProfile.appleMusic.processName)
-                ? .decoderLog
-                : self.audioQueueSource(for: logStats)
+            let source: RateSource
+            if Self.resolveProcessName(track: currentTrack) == PlayerProfile.appleMusic.processName {
+                source = logStats.first?.isAppleMusicFormat == true ? .appleMusicFormatLog : .decoderLog
+            } else {
+                source = self.audioQueueSource(for: logStats)
+            }
             self.applyStats(logStats, source: source, expectedTrack: expectedTrack, recursion: recursion)
         }
+    }
+
+    private func rememberAppleMusicFormat(from stats: [CMPlayerStats]) {
+        guard let incoming = stats.first(where: \CMPlayerStats.isDolbyAtmos)
+                ?? stats.first(where: \CMPlayerStats.isAppleMusicFormat) else {
+            return
+        }
+        guard AppleMusicFormatPolicy.shouldReplaceCachedFormat(
+            currentIsDolbyAtmos: appleMusicFormatEvidence?.isDolbyAtmos == true,
+            incomingIsDolbyAtmos: incoming.isDolbyAtmos
+        ) else {
+            return
+        }
+        appleMusicFormatEvidence = incoming
     }
 
     /// Classifies an AudioQueue log result for the gate.
@@ -494,7 +592,7 @@ class OutputDevices: ObservableObject {
         var allStats: [CMPlayerStats]
         if isMusicProcess {
             guard isAppleMusicSource else { return [] }
-            allStats = self.getAllStats(process: processName)
+            allStats = self.cachedAppleMusicStats(process: processName)
         } else {
             Logger.switching.info("log chain for process \(processName) via AudioQueue parser")
             // AudioQueue "New output" entries are written once per queue creation
@@ -554,6 +652,27 @@ class OutputDevices: ObservableObject {
         return stats
     }
 
+    private func cachedAppleMusicStats(process: String) -> [CMPlayerStats] {
+        let key = "am:\(process)"
+        if let cached = logStatsCache[key],
+           Date().timeIntervalSince(cached.at) < Self.logStatsTTL {
+            Logger.switching.info("[LogCache] hit for Apple Music (\(cached.stats.count) stats)")
+            return cached.stats
+        }
+        let stats = self.getAllStats(
+            process: process,
+            parser: CMPlayerParser.parseAppleMusicConsoleLogs,
+            durationSeconds: AppleMusicFormatParser.logWindowSeconds
+        )
+        if stats.isEmpty {
+            logStatsCache.removeValue(forKey: key)
+        } else {
+            logStatsCache[key] = (stats, Date())
+            Logger.switching.info("[LogCache] stored for Apple Music (\(stats.count) stats)")
+        }
+        return stats
+    }
+
     /// Applies the best matching device format for the given stats, and
     /// schedules one retry when nothing usable was found yet.
     private func applyStats(_ allStats: [CMPlayerStats], source: RateSource = .decoderLog, expectedTrack: MediaTrack?, recursion: Bool) {
@@ -589,10 +708,6 @@ class OutputDevices: ObservableObject {
             // MediaRemote probe itself. A differing rate may only be
             // applied when (a) the post-track-change window has closed
             // AND (b) the same candidate has persisted across evaluations.
-            // Persistence is tiered: a first-time candidate needs only
-            // 2.0 s, but once the track already has an applied/cached
-            // rate, overriding it requires 12 s — late Atmos handshakes
-            // can outlive the short threshold yet must not cause a flap.
             // Equal-rate candidates pass through untouched.
             let sinceTrackChange = lastTrackChangeDate.map {
                 Date().timeIntervalSince($0)
@@ -606,10 +721,6 @@ class OutputDevices: ObservableObject {
                     }
                     return
                 }
-                // Tiered persistence: first evaluation for this track uses the
-                // short confirmation; once a rate is already applied+cached for
-                // the current track, overturning it requires the candidate to
-                // persist far longer (transient handshakes never do).
                 let requiredPersistence = currentTrack.flatMap { trackAndSample[$0] } != nil
                     ? policy.lockedOverride
                     : policy.stability
@@ -745,6 +856,8 @@ class OutputDevices: ObservableObject {
         self.pendingCandidateRate = nil
         self.pendingCandidateFirstSeen = nil
         self.previousBitDepth = bitDepth
+        RateSyncWidgetConfiguration.saveAudioFormat(sampleRate: sampleRate, bitDepth: bitDepth)
+        reloadWidgetTimeline(reason: "RateSync applied format")
         DispatchQueue.main.async { [self] in
             let readableSampleRate = sampleRate / 1000
             self.currentSampleRate = readableSampleRate
@@ -753,6 +866,16 @@ class OutputDevices: ObservableObject {
         if runUserScript {
             UserScriptRunner.run(sampleRate: sampleRate, bitDepth: bitDepth)
         }
+    }
+
+    private func reloadWidgetTimeline(reason: String) {
+        Logger.switching.info("[Widget] reload: \(reason, privacy: .public)")
+        WidgetCenter.shared.reloadTimelines(ofKind: RateSyncWidgetConfiguration.widgetKind)
+    }
+
+    func refreshWidgetTimelineOnLaunch() {
+        RateSyncWidgetConfiguration.migrateLegacyState()
+        reloadWidgetTimeline(reason: "app launched")
     }
     
     /// Shared formatted text for the menu bar label and the menu content view.
@@ -771,13 +894,18 @@ class OutputDevices: ObservableObject {
     /// the sample rate would never switch until the next track change.
     func reevaluateNowPlaying() {
         MediaRemoteSampleRateProbe.fetchNowPlayingInfo { [weak self] trackInfo in
-            guard let self, let trackInfo else { return }
+            guard let self else { return }
+            guard let trackInfo else {
+                Logger.switching.info("[Reevaluate] now playing snapshot unavailable, preserving current widget track")
+                return
+            }
             self.processQueue.async {
                 let bundleID = trackInfo.payload.bundleIdentifier
                     ?? NSRunningApplication(processIdentifier: trackInfo.payload.PID ?? 0)?.bundleIdentifier
                 if let monitored = Defaults.shared.monitoredBundleIdentifier,
                    bundleID != monitored {
                     Logger.switching.info("[Reevaluate] \(bundleID ?? "?") is not the monitored source, skip")
+                    self.clearNowPlayingTrack()
                     return
                 }
                 Logger.switching.info("[Reevaluate] re-evaluating switch for \(bundleID ?? "?")")
@@ -807,9 +935,30 @@ class OutputDevices: ObservableObject {
     }
 
     private func handleTrackDidChange(_ newTrack: TrackInfo, eventDate: Date?) {
+        pendingNowPlayingClear?.cancel()
+        pendingNowPlayingClear = nil
         self.previousTrack = self.currentTrack
         self.currentTrack = MediaTrack(trackInfo: newTrack)
-        if self.previousTrack != self.currentTrack {
+        let trackChanged = self.previousTrack != self.currentTrack
+        let sharedTrack = RateSyncWidgetConfiguration.loadNowPlayingTrack()
+        let widgetMetadataChanged = sharedTrack?.title != newTrack.payload.title
+            || sharedTrack?.artist != newTrack.payload.artist
+            || sharedTrack?.artworkDataBase64 != newTrack.payload.artworkDataBase64
+
+        if trackChanged || widgetMetadataChanged {
+            RateSyncWidgetConfiguration.saveNowPlayingTrack(
+                title: newTrack.payload.title,
+                artist: newTrack.payload.artist,
+                artworkDataBase64: newTrack.payload.artworkDataBase64,
+                updatedAt: eventDate ?? Date()
+            )
+            reloadWidgetTimeline(
+                reason: trackChanged ? "now playing track changed" : "now playing metadata updated"
+            )
+        }
+
+        if trackChanged {
+
             // Unlock the new track so its sample rate can be applied. The lock is
             // per-track and must not leak across replays of the same song.
             // Also drop the PREVIOUS track's entry: the lookup tables are
@@ -829,6 +978,7 @@ class OutputDevices: ObservableObject {
             // time minus a small tolerance, so the new track's logs pass the filter
             // while stale logs from the previous track are discarded.
             self.lastTrackChangeDate = (eventDate ?? Date()).addingTimeInterval(-0.5)
+            self.appleMusicFormatEvidence = nil
             self.pendingCandidateRate = nil
             self.pendingCandidateFirstSeen = nil
             self.renewTimer()
@@ -842,5 +992,36 @@ class OutputDevices: ObservableObject {
         // in switchLatestSampleRate can discard it if the track changes first.
         let trackSnapshot = MediaTrack(trackInfo: newTrack)
         self.switchLatestSampleRate(for: trackSnapshot)
+    }
+
+    func clearNowPlayingTrack() {
+        processQueue.async { [weak self] in
+            guard let self else { return }
+            self.pendingNowPlayingClear?.cancel()
+            self.pendingNowPlayingClear = nil
+            self.currentTrack = nil
+            self.previousTrack = nil
+            self.trackAndSample.removeAll()
+            self.trackAndBitDepth.removeAll()
+            self.logStatsCache.removeAll()
+            self.appleMusicFormatEvidence = nil
+            self.lastTrackChangeDate = nil
+            self.pendingCandidateRate = nil
+            self.pendingCandidateFirstSeen = nil
+            self.timerCancellable?.cancel()
+            self.timerCancellable = nil
+            self.timerCalls = 0
+            let clearWork = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.pendingNowPlayingClear = nil
+                RateSyncWidgetConfiguration.clearNowPlayingTrack()
+                self.reloadWidgetTimeline(reason: "now playing stopped")
+            }
+            self.pendingNowPlayingClear = clearWork
+            self.processQueue.asyncAfter(
+                deadline: .now() + Self.nowPlayingClearGracePeriod,
+                execute: clearWork
+            )
+        }
     }
 }
