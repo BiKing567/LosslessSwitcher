@@ -6,6 +6,24 @@
         <description>RateSync 更新清单</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 3.2.1 (构建 31)</title>
+            <pubDate>Mon, 07 Sep 2026 04:51:58 +0000</pubDate>
+            <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <p>RateSync 3.2.1 紧急修复版，重点修复从 Release 更新后权限反复申请以及桌面小组件空白的问题。</p>
+                <h4>修复</h4>
+                <ul>
+                    <li>修复 Apple Music 同一首歌反复触发 AppleScript fallback，导致权限申请循环的问题。</li>
+                    <li>优化当前音轨的 fallback 状态管理，避免轮询重复访问系统日志和音乐软件。</li>
+                    <li>修复应用更新后桌面小组件缓存未及时刷新、显示空白的问题。</li>
+                    <li>增强小组件启动时的状态迁移和时间线刷新，保持歌曲信息、采样率和位深度同步。</li>
+                </ul>
+                <p><a href="https://github.com/BiKing567/RateSync/releases/tag/v3.2.1">查看完整说明</a></p>
+            ]]></description>
+            <sparkle:releaseNotesLink>https://github.com/BiKing567/RateSync/releases/tag/v3.2.1</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/BiKing567/RateSync/releases/download/v3.2.1/RateSync-3.2.1.dmg" sparkle:version="31" sparkle:shortVersionString="3.2.1" sparkle:edSignature="osijAH7kaZkGq/ydPH9ybqg1WwwZ11trFqf3VwQ1MG+9MgBG5XkeazQzQLE81tx0fQFtA27yEq1cneblN3nFAw==" length="3099533" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Version 3.2.0 (构建 30)</title>
             <pubDate>Mon, 07 Sep 2026 03:16:08 +0000</pubDate>
             <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
