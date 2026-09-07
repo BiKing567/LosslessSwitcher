@@ -6,6 +6,35 @@
         <description>RateSync 更新清单</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 3.2.0 (构建 30)</title>
+            <pubDate>Mon, 07 Sep 2026 03:16:08 +0000</pubDate>
+            <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <p>RateSync 3.2.0 正式版，重点优化桌面小组件体验和 Apple Music 音频格式切换稳定性。</p>
+                <h4>新增</h4>
+                <ul>
+                    <li>新增 macOS 桌面小组件，支持小尺寸和中尺寸布局。</li>
+                    <li>小组件显示专辑封面、歌曲名、歌手名、采样率和位深度。</li>
+                    <li>中尺寸小组件支持更完整的歌曲信息和两行歌曲名显示。</li>
+                </ul>
+                <h4>优化</h4>
+                <ul>
+                    <li>优化 Apple Music 音频格式识别和切换速度。</li>
+                    <li>加强 Dolby Atmos 曲目之间切换的稳定性，避免切歌时短暂误切到 44.1 kHz。</li>
+                    <li>优化 Widget 状态同步、专辑封面缓存和外部格式变化刷新。</li>
+                    <li>继续优化网易云音乐和 QQ 音乐的独立监听与快速切换。</li>
+                </ul>
+                <h4>修复</h4>
+                <ul>
+                    <li>修复部分情况下小组件空白、状态不刷新或无法获取最新歌曲信息的问题。</li>
+                    <li>修复 Apple Music Dolby Atmos 日志标记识别不完整的问题。</li>
+                </ul>
+                <p><a href="https://github.com/BiKing567/RateSync/releases/tag/v3.2.0">查看完整说明</a></p>
+            ]]></description>
+            <sparkle:releaseNotesLink>https://github.com/BiKing567/RateSync/releases/tag/v3.2.0</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/BiKing567/RateSync/releases/download/v3.2.0/RateSync-3.2.0.dmg" sparkle:version="30" sparkle:shortVersionString="3.2.0" sparkle:edSignature="dk2rtrRhRZKkhLxxh5aWYwZCs+n0DgBRsVI8yApF68yZ3/3yTv2qMGB09hz1V2SoppoqOE14vINLYXoxsiG4DQ==" length="3098425" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Version 3.1.0-beta (构建 11)</title>
             <pubDate>Wed, 02 Sep 2026 15:10:20 +0000</pubDate>
             <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
