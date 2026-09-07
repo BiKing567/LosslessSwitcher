@@ -75,6 +75,8 @@ class OutputDevices: ObservableObject {
     private var trackAndSample = [MediaTrack : Float64]()
     private var trackAndBitDepth = [MediaTrack : Int]()
     private var appleMusicFormatEvidence: CMPlayerStats?
+    private var appleMusicFallbackFormat: CMPlayerStats?
+    private var appleMusicFallbackAttemptedForTrack = false
     private var previousTrack: MediaTrack?
     private var currentTrack: MediaTrack?
     private var pendingNowPlayingClear: DispatchWorkItem?
@@ -453,6 +455,20 @@ class OutputDevices: ObservableObject {
     /// Log-based rate resolution plus the preset fallback, run after the
     /// MediaRemote probe reported nothing (or was skipped).
     private func runLogChain(expectedTrack: MediaTrack?, recursion: Bool) {
+        if isAppleMusicSource,
+           appleMusicFormatEvidence == nil,
+           appleMusicFallbackAttemptedForTrack {
+            if let appleMusicFallbackFormat {
+                applyStats(
+                    [appleMusicFallbackFormat],
+                    source: .decoderLog,
+                    expectedTrack: expectedTrack,
+                    recursion: recursion
+                )
+            }
+            return
+        }
+
         let logStats = self.statsFromLogs(recursion: recursion)
         if isAppleMusicSource {
             rememberAppleMusicFormat(from: logStats)
@@ -467,9 +483,13 @@ class OutputDevices: ObservableObject {
             }
         }
         if logStats.isEmpty, isAppleMusicSource, appleMusic.isRunning {
-            guard AppleMusicFormatPolicy.shouldUseAppleScriptFallback(hasKnownFormat: appleMusicFormatEvidence != nil) else {
+            guard AppleMusicFormatPolicy.shouldUseAppleScriptFallback(
+                hasKnownFormat: appleMusicFormatEvidence != nil,
+                hasAttemptedFallback: appleMusicFallbackAttemptedForTrack
+            ) else {
                 return
             }
+            appleMusicFallbackAttemptedForTrack = true
             appleMusic.fetchPlaybackState { [weak self] state in
                 guard let self else { return }
                 self.processQueue.async {
@@ -486,6 +506,7 @@ class OutputDevices: ObservableObject {
                             bitDepth: self.previousBitDepth ?? 24,
                             date: Date()
                         )
+                        self.appleMusicFallbackFormat = stat
                         Logger.switching.info("[LogFallback] Apple Music AppleScript sample rate: \(sampleRate)")
                         self.applyStats([stat], source: .decoderLog, expectedTrack: expectedTrack, recursion: recursion)
                     } else {
@@ -868,14 +889,17 @@ class OutputDevices: ObservableObject {
         }
     }
 
-    private func reloadWidgetTimeline(reason: String) {
+    private func reloadWidgetTimeline(reason: String, reloadAll: Bool = false) {
         Logger.switching.info("[Widget] reload: \(reason, privacy: .public)")
         WidgetCenter.shared.reloadTimelines(ofKind: RateSyncWidgetConfiguration.widgetKind)
+        if reloadAll {
+            WidgetCenter.shared.reloadAllTimelines()
+        }
     }
 
     func refreshWidgetTimelineOnLaunch() {
         RateSyncWidgetConfiguration.migrateLegacyState()
-        reloadWidgetTimeline(reason: "app launched")
+        reloadWidgetTimeline(reason: "app launched", reloadAll: true)
     }
     
     /// Shared formatted text for the menu bar label and the menu content view.
@@ -979,6 +1003,8 @@ class OutputDevices: ObservableObject {
             // while stale logs from the previous track are discarded.
             self.lastTrackChangeDate = (eventDate ?? Date()).addingTimeInterval(-0.5)
             self.appleMusicFormatEvidence = nil
+            self.appleMusicFallbackFormat = nil
+            self.appleMusicFallbackAttemptedForTrack = false
             self.pendingCandidateRate = nil
             self.pendingCandidateFirstSeen = nil
             self.renewTimer()
@@ -1005,6 +1031,8 @@ class OutputDevices: ObservableObject {
             self.trackAndBitDepth.removeAll()
             self.logStatsCache.removeAll()
             self.appleMusicFormatEvidence = nil
+            self.appleMusicFallbackFormat = nil
+            self.appleMusicFallbackAttemptedForTrack = false
             self.lastTrackChangeDate = nil
             self.pendingCandidateRate = nil
             self.pendingCandidateFirstSeen = nil

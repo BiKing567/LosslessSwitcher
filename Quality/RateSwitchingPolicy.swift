@@ -59,8 +59,11 @@ enum AppleMusicPriorityPolicy {
 }
 
 enum AppleMusicFormatPolicy {
-    static func shouldUseAppleScriptFallback(hasKnownFormat: Bool) -> Bool {
-        !hasKnownFormat
+    static func shouldUseAppleScriptFallback(
+        hasKnownFormat: Bool,
+        hasAttemptedFallback: Bool = false
+    ) -> Bool {
+        !hasKnownFormat && !hasAttemptedFallback
     }
 
     static func shouldReplaceCachedFormat(

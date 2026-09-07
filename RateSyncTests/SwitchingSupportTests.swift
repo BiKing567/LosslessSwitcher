@@ -123,6 +123,12 @@ final class SwitchingSupportTests: XCTestCase {
         XCTAssertFalse(AppleMusicFormatPolicy.shouldUseAppleScriptFallback(hasKnownFormat: true))
         XCTAssertTrue(AppleMusicFormatPolicy.shouldUseAppleScriptFallback(hasKnownFormat: false))
         XCTAssertFalse(
+            AppleMusicFormatPolicy.shouldUseAppleScriptFallback(
+                hasKnownFormat: false,
+                hasAttemptedFallback: true
+            )
+        )
+        XCTAssertFalse(
             AppleMusicFormatPolicy.shouldReplaceCachedFormat(
                 currentIsDolbyAtmos: true,
                 incomingIsDolbyAtmos: false
