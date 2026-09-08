@@ -23,6 +23,13 @@ For example, if the next song is a Hi-Res lossless track with a 192 kHz sample r
 
 When the next song has a lower sample rate, it does the opposite.
 
+The 3.2 series adds macOS desktop widgets for quick access to the current playback information:
+
+- Small and medium widget layouts are available.
+- The widget shows the album artwork, song title, and artist.
+- It displays the current output sample rate and bit depth.
+- The widget follows the currently playing track and refreshes automatically.
+
 ## Installation
 
 ### For macOS Big Sur 11.4 through macOS Sonoma 14.x
@@ -32,7 +39,7 @@ The 1.x releases also work on macOS Sequoia 15.3.1 and earlier.
 You can find the latest stable release on the 1.x branch (upstream) here: [v1.1 download link](https://github.com/vincentneo/LosslessSwitcher/releases/tag/1.1.0)
 
 ### For macOS Sequoia 15.4 and later
-This localized version is based on the upstream 2.0 branch and targets macOS Sequoia 15.4 and later. The current version is RateSync 3.0 (localized edition); please download the latest release from the [Releases page](https://github.com/BiKing567/RateSync/releases).
+This localized version is based on the upstream 2.0 branch and targets macOS Sequoia 15.4 and later. The current release is RateSync 3.2.1; please download the latest version from the [Releases page](https://github.com/BiKing567/RateSync/releases).
 The upstream 2.0 beta can be found here: [v2.0 Beta 1](https://github.com/vincentneo/LosslessSwitcher/releases/tag/2.0-beta1).
 
 #### Installation steps
@@ -55,6 +62,12 @@ The screenshot below shows the monitoring-source picker, where you can choose wh
 The screenshot below shows the built-in EQ (equalizer) interface:
 
 <img width="252" alt="EQ equalizer interface" src="./EQ.png">
+
+The desktop widget shows the current song and output audio format at a glance:
+
+<p align="center">
+  <img width="560" alt="Desktop widget" src="./小组件.png">
+</p>
 
 Also note:
 - Audio playback may be briefly interrupted while the app switches the sample rate.
