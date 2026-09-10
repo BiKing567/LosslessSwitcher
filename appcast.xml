@@ -6,6 +6,31 @@
         <description>RateSync 更新清单</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 3.2.2 (构建 32)</title>
+            <pubDate>Thu, 10 Sep 2026 02:47:15 +0000</pubDate>
+            <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <p>RateSync 3.2.2 修复小组件无法添加、黑屏，以及部分情况下采样率和歌曲信息不同步的问题。</p>
+                <h4>修复</h4>
+                <ul>
+                    <li>修复本地安装或更新后小组件扩展未注册，导致小组件从添加面板消失或显示黑屏的问题。</li>
+                    <li>修复 WidgetKit entitlement 在本地测试签名过程中丢失的问题。</li>
+                    <li>优化小组件状态合并，优先使用实时输出格式，分别处理音频格式和歌曲信息更新。</li>
+                    <li>修复 Apple Music 在无法获取活动播放器 PID 时误接收其他来源音频格式的问题。</li>
+                    <li>修复 Apple Music fallback 已有缓存后停止等待后续日志证据的问题，提升 Dolby 音频格式识别稳定性。</li>
+                </ul>
+                <h4>优化</h4>
+                <ul>
+                    <li>小组件添加面板描述跟随系统语言显示中文或英文。</li>
+                    <li>发布脚本增加 Widget entitlement、Hardened Runtime 和签名校验。</li>
+                </ul>
+                <p>注：本版本为测试签名包，首次安装可能需要右键打开。</p>
+                <p><a href="https://github.com/BiKing567/RateSync/releases/tag/v3.2.2">查看完整说明</a></p>
+            ]]></description>
+            <sparkle:releaseNotesLink>https://github.com/BiKing567/RateSync/releases/tag/v3.2.2</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/BiKing567/RateSync/releases/download/v3.2.2/RateSync-3.2.2.dmg" sparkle:version="32" sparkle:shortVersionString="3.2.2" sparkle:edSignature="GKWuLfsniu3VRiI50Lzm+j2xjmExzhe5wXQ16awQ2UoyXuM6XPR1jQO93MLj1hs4jJ4fjjs0sBDScubNkXHGAQ==" length="3111470" type="application/octet-stream"/>
+        </item>
+        <item>
             <title>Version 3.2.1 (构建 31)</title>
             <pubDate>Mon, 07 Sep 2026 04:51:58 +0000</pubDate>
             <sparkle:minimumSystemVersion>15.4</sparkle:minimumSystemVersion>
