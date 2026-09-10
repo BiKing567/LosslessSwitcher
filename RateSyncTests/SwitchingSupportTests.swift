@@ -36,6 +36,15 @@ final class SwitchingSupportTests: XCTestCase {
         )
     }
 
+    func testMediaRemoteOnlyAcceptsUnverifiedFormatWithoutExpectedPID() {
+        XCTAssertTrue(
+            RateSwitchingPolicy.shouldAcceptUnverifiedMediaRemoteFormat(expectedPID: nil)
+        )
+        XCTAssertFalse(
+            RateSwitchingPolicy.shouldAcceptUnverifiedMediaRemoteFormat(expectedPID: 42)
+        )
+    }
+
     func testAppleMusicParserPrefersDolbyAtmosFormatOverNearbyLossless44_1Log() {
         let entries = [
             AppleMusicLogEntry(
@@ -312,6 +321,79 @@ final class SwitchingSupportTests: XCTestCase {
         XCTAssertEqual(
             RateSyncWidgetConfiguration.sanitizedArtworkDataBase64(artwork),
             artwork
+        )
+    }
+
+    func testAppleMusicFallbackKeepsPollingForLaterLogEvidence() {
+        XCTAssertEqual(
+            AppleMusicFormatPolicy.resolution(
+                hasLogEvidence: false,
+                hasLogStats: false,
+                hasCachedFallback: true,
+                hasAttemptedFallback: true,
+                isPlaying: true
+            ),
+            .cachedFallback
+        )
+        XCTAssertEqual(
+            AppleMusicFormatPolicy.resolution(
+                hasLogEvidence: true,
+                hasLogStats: true,
+                hasCachedFallback: true,
+                hasAttemptedFallback: true,
+                isPlaying: true
+            ),
+            .logEvidence
+        )
+    }
+
+    func testWidgetStateMergesLatestIndependentFormatAndTrackSnapshots() {
+        let older = RateSyncWidgetConfiguration.WidgetState(
+            sampleRate: 44_100,
+            bitDepth: 16,
+            formatUpdatedAt: Date(timeIntervalSince1970: 10),
+            title: "Older title",
+            artist: "Older artist",
+            artworkDataBase64: nil,
+            trackUpdatedAt: Date(timeIntervalSince1970: 20)
+        )
+        let newerFormat = RateSyncWidgetConfiguration.WidgetState(
+            sampleRate: 48_000,
+            bitDepth: 24,
+            formatUpdatedAt: Date(timeIntervalSince1970: 30),
+            title: nil,
+            artist: nil,
+            artworkDataBase64: nil,
+            trackUpdatedAt: nil
+        )
+
+        let merged = RateSyncWidgetConfiguration.mergeStates([older, newerFormat])
+
+        XCTAssertEqual(merged?.sampleRate, 48_000)
+        XCTAssertEqual(merged?.bitDepth, 24)
+        XCTAssertEqual(merged?.title, "Older title")
+        XCTAssertEqual(merged?.artist, "Older artist")
+        XCTAssertEqual(merged?.trackUpdatedAt, Date(timeIntervalSince1970: 20))
+    }
+
+    func testWidgetPrefersLiveOutputFormatWhenPersistedStateIsStale() {
+        let persisted = SharedAudioFormat(
+            sampleRate: 44_100,
+            bitDepth: 16,
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+        let live = SharedAudioFormat(
+            sampleRate: 48_000,
+            bitDepth: 24,
+            updatedAt: Date(timeIntervalSince1970: 20)
+        )
+
+        XCTAssertEqual(
+            RateSyncWidgetConfiguration.preferredAudioFormat(
+                persisted: persisted,
+                live: live
+            ),
+            live
         )
     }
 }

@@ -1,0 +1,5 @@
+/* Widget metadata */
+"Not Playing" = "Not Playing";
+"No Artist" = "No Artist";
+"widget.configurationDisplayName" = "RateSync Audio Format";
+"widget.configurationDescription" = "Shows the current track and output format.";

@@ -46,6 +46,10 @@ enum RateSwitchingPolicy {
     static func bitDepth(reportedByMediaRemote: Int?, fallback: Int?) -> Int {
         reportedByMediaRemote ?? fallback ?? 24
     }
+
+    static func shouldAcceptUnverifiedMediaRemoteFormat(expectedPID: pid_t?) -> Bool {
+        expectedPID == nil
+    }
 }
 
 enum AppleMusicPriorityPolicy {
@@ -59,11 +63,37 @@ enum AppleMusicPriorityPolicy {
 }
 
 enum AppleMusicFormatPolicy {
+    enum Resolution: Equatable {
+        case logEvidence
+        case cachedFallback
+        case requestAppleScript
+        case noFormat
+    }
+
     static func shouldUseAppleScriptFallback(
         hasKnownFormat: Bool,
         hasAttemptedFallback: Bool = false
     ) -> Bool {
         !hasKnownFormat && !hasAttemptedFallback
+    }
+
+    static func resolution(
+        hasLogEvidence: Bool,
+        hasLogStats: Bool,
+        hasCachedFallback: Bool,
+        hasAttemptedFallback: Bool,
+        isPlaying: Bool
+    ) -> Resolution {
+        if hasLogEvidence {
+            return .logEvidence
+        }
+        if hasCachedFallback {
+            return .cachedFallback
+        }
+        if !hasLogStats, isPlaying, !hasAttemptedFallback {
+            return .requestAppleScript
+        }
+        return .noFormat
     }
 
     static func shouldReplaceCachedFormat(

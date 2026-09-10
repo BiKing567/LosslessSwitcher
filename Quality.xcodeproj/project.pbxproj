@@ -57,6 +57,7 @@
 		BFA0003B2E10000100320001 /* TrackEventIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0003C2E10000100320001 /* TrackEventIdentity.swift */; };
 		BFA0003F2E10000100320001 /* AppleMusicFormatParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0003E2E10000100320001 /* AppleMusicFormatParser.swift */; };
 		BFA000402E10000100320001 /* AppleMusicFormatParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFA0003E2E10000100320001 /* AppleMusicFormatParser.swift */; };
+		BFA000442E10000100320001 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = BFA000432E10000100320001 /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -130,6 +131,8 @@
 		BFA000392E10000100320001 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		BFA0003C2E10000100320001 /* TrackEventIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackEventIdentity.swift; sourceTree = "<group>"; };
 		BFA0003E2E10000100320001 /* AppleMusicFormatParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicFormatParser.swift; sourceTree = "<group>"; };
+		BFA000412E10000100320001 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh-Hans; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
+		BFA000422E10000100320001 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "en.lproj/Localizable.strings"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -255,6 +258,7 @@
 				BFA000272E10000100320001 /* RateSyncWidget.swift */,
 				BFA0002A2E10000100320001 /* RateSyncWidget.entitlements */,
 				BFA000352E10000100320001 /* Info.plist */,
+				BFA000432E10000100320001 /* Localizable.strings */,
 			);
 			path = RateSyncWidget;
 			sourceTree = "<group>";
@@ -310,6 +314,7 @@
 			buildPhases = (
 				BFA0002F2E10000100320001 /* Sources */,
 				BFA0002E2E10000100320001 /* Frameworks */,
+				BFA000452E10000100320001 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -390,6 +395,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BFA000452E10000100320001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BFA000442E10000100320001 /* Localizable.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -467,6 +480,15 @@
 			children = (
 				BF9900012E0999990032F001 /* zh-Hans */,
 				BF9900042E0999990032F001 /* en */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		BFA000432E10000100320001 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				BFA000412E10000100320001 /* zh-Hans */,
+				BFA000422E10000100320001 /* en */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";
@@ -594,8 +616,9 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Quality/Quality.entitlements;
 				CODE_SIGN_STYLE = Manual;
+				CODE_SIGNING_ALLOWED = NO;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "\"Quality/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -611,7 +634,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.2.1;
+				MARKETING_VERSION = 3.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSync";
 				PRODUCT_NAME = RateSync;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -630,7 +653,7 @@
 				CODE_SIGN_ENTITLEMENTS = Quality/Quality.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_ASSET_PATHS = "\"Quality/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -646,7 +669,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.2.1;
+				MARKETING_VERSION = 3.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSync";
 				PRODUCT_NAME = RateSync;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -687,12 +710,13 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = RateSyncWidget/RateSyncWidget.entitlements;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 31;
+				CODE_SIGNING_ALLOWED = NO;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RateSyncWidget/Info.plist;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.2.1;
+				MARKETING_VERSION = 3.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSync.Widget";
 				PRODUCT_NAME = RateSyncWidget;
 				SKIP_INSTALL = YES;
@@ -706,12 +730,12 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = RateSyncWidget/RateSyncWidget.entitlements;
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 31;
+				CURRENT_PROJECT_VERSION = 32;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = RateSyncWidget/Info.plist;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 3.2.1;
+				MARKETING_VERSION = 3.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.biking.RateSync.Widget";
 				PRODUCT_NAME = RateSyncWidget;
 				SKIP_INSTALL = YES;

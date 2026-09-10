@@ -50,3 +50,7 @@
 
 /* Initial status item text */
 "Loading..." = "Loading...";
+
+/* Script validation */
+"Invalid Script" = "Invalid Script";
+"The selected file is not executable, is a symlink, or is not owned by you. Please select a valid executable script." = "The selected file is not executable, is a symlink, or is not owned by you. Please select a valid executable script.";

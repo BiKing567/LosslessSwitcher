@@ -52,3 +52,7 @@
 
 /* Initial status item text */
 "Loading..." = "加载中...";
+
+/* Script validation */
+"Invalid Script" = "脚本无效";
+"The selected file is not executable, is a symlink, or is not owned by you. Please select a valid executable script." = "所选文件不可执行、是符号链接，或不属于您。请选择有效的可执行脚本。";

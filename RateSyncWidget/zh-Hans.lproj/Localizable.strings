@@ -1,0 +1,5 @@
+/* Widget metadata */
+"Not Playing" = "未播放";
+"No Artist" = "未知艺术家";
+"widget.configurationDisplayName" = "RateSync 音频格式";
+"widget.configurationDescription" = "显示当前歌曲和输出音频格式。";

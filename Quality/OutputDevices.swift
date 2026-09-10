@@ -455,40 +455,40 @@ class OutputDevices: ObservableObject {
     /// Log-based rate resolution plus the preset fallback, run after the
     /// MediaRemote probe reported nothing (or was skipped).
     private func runLogChain(expectedTrack: MediaTrack?, recursion: Bool) {
-        if isAppleMusicSource,
-           appleMusicFormatEvidence == nil,
-           appleMusicFallbackAttemptedForTrack {
-            if let appleMusicFallbackFormat {
-                applyStats(
-                    [appleMusicFallbackFormat],
-                    source: .decoderLog,
-                    expectedTrack: expectedTrack,
-                    recursion: recursion
-                )
-            }
-            return
-        }
-
         let logStats = self.statsFromLogs(recursion: recursion)
         if isAppleMusicSource {
             rememberAppleMusicFormat(from: logStats)
-            if let appleMusicFormatEvidence {
-                applyStats(
-                    [appleMusicFormatEvidence],
-                    source: .appleMusicFormatLog,
-                    expectedTrack: expectedTrack,
-                    recursion: recursion
-                )
-                return
-            }
         }
-        if logStats.isEmpty, isAppleMusicSource, appleMusic.isRunning {
-            guard AppleMusicFormatPolicy.shouldUseAppleScriptFallback(
-                hasKnownFormat: appleMusicFormatEvidence != nil,
-                hasAttemptedFallback: appleMusicFallbackAttemptedForTrack
-            ) else {
-                return
-            }
+        let appleMusicResolution = isAppleMusicSource
+            ? AppleMusicFormatPolicy.resolution(
+                hasLogEvidence: appleMusicFormatEvidence != nil,
+                hasLogStats: !logStats.isEmpty,
+                hasCachedFallback: appleMusicFallbackFormat != nil,
+                hasAttemptedFallback: appleMusicFallbackAttemptedForTrack,
+                isPlaying: appleMusic.isRunning
+            )
+            : .noFormat
+        if appleMusicResolution == .logEvidence,
+           let appleMusicFormatEvidence {
+            applyStats(
+                [appleMusicFormatEvidence],
+                source: .appleMusicFormatLog,
+                expectedTrack: expectedTrack,
+                recursion: recursion
+            )
+            return
+        }
+        if appleMusicResolution == .cachedFallback,
+           let appleMusicFallbackFormat {
+            applyStats(
+                [appleMusicFallbackFormat],
+                source: .decoderLog,
+                expectedTrack: expectedTrack,
+                recursion: recursion
+            )
+            return
+        }
+        if appleMusicResolution == .requestAppleScript {
             appleMusicFallbackAttemptedForTrack = true
             appleMusic.fetchPlaybackState { [weak self] state in
                 guard let self else { return }

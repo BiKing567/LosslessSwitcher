@@ -205,9 +205,14 @@ struct RateSyncWidgetProvider: TimelineProvider {
     }
 
     private func currentEntry() -> RateSyncWidgetEntry {
-        RateSyncWidgetEntry(
+        let persistedAudioFormat = RateSyncWidgetConfiguration.loadAudioFormat()
+        let liveAudioFormat = CurrentOutputAudioFormat.load()
+        return RateSyncWidgetEntry(
             date: Date(),
-            audioFormat: RateSyncWidgetConfiguration.loadAudioFormat(),
+            audioFormat: RateSyncWidgetConfiguration.preferredAudioFormat(
+                persisted: persistedAudioFormat,
+                live: liveAudioFormat
+            ),
             nowPlayingTrack: RateSyncWidgetConfiguration.loadNowPlayingTrack()
         )
     }
@@ -301,11 +306,11 @@ private struct TrackMetadataTextView: View {
     let layout: RateSyncWidgetLayout
 
     private var title: String {
-        track?.titleText ?? "Not Playing"
+        track?.titleText ?? NSLocalizedString("Not Playing", comment: "Widget placeholder when no track is playing")
     }
 
     private var artist: String {
-        track?.artistText ?? "No Artist"
+        track?.artistText ?? NSLocalizedString("No Artist", comment: "Widget placeholder when artist is unavailable")
     }
 
     var body: some View {
@@ -447,8 +452,12 @@ struct RateSyncWidget: Widget {
         StaticConfiguration(kind: RateSyncWidgetConfiguration.widgetKind, provider: RateSyncWidgetProvider()) { entry in
             RateSyncWidgetView(entry: entry)
         }
-        .configurationDisplayName("RateSync Audio Format")
-        .description("Shows the current track and output format.")
+        .configurationDisplayName(
+            LocalizedStringResource("widget.configurationDisplayName", bundle: .main)
+        )
+        .description(
+            LocalizedStringResource("widget.configurationDescription", bundle: .main)
+        )
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

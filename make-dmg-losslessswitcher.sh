@@ -8,8 +8,8 @@ set -euo pipefail
 
 PROJ_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_NAME="RateSync"
-VERSION="3.2.1"
-BUILD="31"
+VERSION="3.2.2"
+BUILD="32"
 OUT="${1:-$PROJ_DIR/RateSync-$VERSION.dmg}"
 
 BUILD_STAGING="$(mktemp -d /tmp/lossless-dragdrop-build-XXXXXX)"
@@ -53,9 +53,11 @@ fi
 # 未签名/ad-hoc 签名 app 的辅助功能授权绑定二进制指纹，每次重新构建
 # 都会失效（表现为"每次重启权限都掉"）。使用固定的自签名证书签名后，
 # 授权按证书身份 + bundle id 记录，重新构建/更新不再丢失。
-# 发布签名必须显式指定；本地测试可用 RATESYNC_SKIP_SIGNING=1 生成无签名 DMG。
+# 发布签名必须显式指定；本地测试可用 RATESYNC_SKIP_SIGNING=1 生成带 entitlement 的 ad-hoc DMG。
 SIGN_IDENTITY="${RATESYNC_SIGN_IDENTITY:-}"
 SKIP_SIGNING="${RATESYNC_SKIP_SIGNING:-0}"
+NOTARY_PROFILE="${RATESYNC_NOTARY_PROFILE:-}"
+SKIP_NOTARIZATION="${RATESYNC_SKIP_NOTARIZATION:-0}"
 WIDGET_EXTENSION="$APP/Contents/PlugIns/RateSyncWidget.appex"
 
 if [[ ! -d "$WIDGET_EXTENSION" ]]; then
@@ -63,48 +65,84 @@ if [[ ! -d "$WIDGET_EXTENSION" ]]; then
     exit 1
 fi
 
+sign_nested_code() {
+    local codesign_args=("$@")
+    if [[ -d "$APP/Contents/Frameworks" ]]; then
+        # Sign every nested Mach-O first (Sparkle includes Autoupdate, Updater,
+        # and XPC helpers), then sign the framework bundles from the inside out.
+        while IFS= read -r -d "" embedded_code; do
+            if file "$embedded_code" | rg -q "Mach-O"; then
+                codesign --force "${codesign_args[@]}" "$embedded_code" || {
+                    echo "==> 错误：内嵌 Mach-O 签名失败：$embedded_code" >&2
+                    exit 1
+                }
+            fi
+        done < <(find "$APP/Contents/Frameworks" -type f -print0)
+        while IFS= read -r -d "" embedded_framework; do
+            codesign --force "${codesign_args[@]}" "$embedded_framework" || {
+                echo "==> 错误：内嵌框架签名失败：$embedded_framework" >&2
+                exit 1
+            }
+        done < <(find "$APP/Contents/Frameworks" -depth -type d -name "*.framework" -print0)
+    fi
+}
+
+verify_entitlement_value() {
+    local bundle_path="$1"
+    local expected_value="$2"
+    if ! codesign -d --entitlements - "$bundle_path" 2>/dev/null | rg -qF -- "$expected_value"; then
+        echo "==> 错误：$bundle_path 缺少签名 entitlement：$expected_value" >&2
+        exit 1
+    fi
+}
+
 if [[ "$SKIP_SIGNING" == "1" ]]; then
-    echo "==> 警告：RATESYNC_SKIP_SIGNING=1，仅生成本机测试包，不可分发"
+    echo "==> 本机测试签名 ${APP_NAME}（ad-hoc，保留 WidgetKit entitlement）"
+    sign_nested_code --sign -
+    codesign --force --sign - \
+        --entitlements "$PROJ_DIR/RateSyncWidget/RateSyncWidget.entitlements" \
+        "$WIDGET_EXTENSION" || { echo "==> 错误：Widget 扩展本机签名失败" >&2; exit 1; }
+    codesign --force --sign - \
+        --entitlements "$PROJ_DIR/Quality/Quality.entitlements" \
+        "$APP" || { echo "==> 错误：App 本机签名失败" >&2; exit 1; }
+    verify_entitlement_value "$WIDGET_EXTENSION" "[Key] com.apple.security.app-sandbox"
+    verify_entitlement_value "$WIDGET_EXTENSION" "group.com.biking.RateSync"
+    verify_entitlement_value "$APP" "group.com.biking.RateSync"
+    codesign --verify --deep --strict "$APP"
 else
     if [[ -z "$SIGN_IDENTITY" ]]; then
         echo "==> 错误：发布打包必须设置 RATESYNC_SIGN_IDENTITY；测试包才可设置 RATESYNC_SKIP_SIGNING=1" >&2
         exit 1
     fi
     IDENTITY_LIST="$(security find-identity -v -p codesigning 2>/dev/null || true)"
-    if ! printf '%s\n' "$IDENTITY_LIST" | rg -qF -- "$SIGN_IDENTITY"; then
+    if ! printf "%s\n" "$IDENTITY_LIST" | rg -qF -- "$SIGN_IDENTITY"; then
         echo "==> 错误：签名身份不可用：$SIGN_IDENTITY" >&2
-        printf '%s\n' "$IDENTITY_LIST" >&2
+        printf "%s\n" "$IDENTITY_LIST" >&2
+        exit 1
+    fi
+    MATCHED_IDENTITY="$(printf "%s\n" "$IDENTITY_LIST" | rg -F -- "$SIGN_IDENTITY" | sed -n "1p" || true)"
+    if ! printf "%s\n" "$MATCHED_IDENTITY" | rg -q "Developer ID Application:"; then
+        echo "==> 错误：发布包必须使用 Developer ID Application 证书，禁止使用自签名或开发证书" >&2
+        printf "%s\n" "$MATCHED_IDENTITY" >&2
         exit 1
     fi
     echo "==> 证书签名 ${APP_NAME}（身份：${SIGN_IDENTITY}）"
-    if [[ -d "$APP/Contents/Frameworks" ]]; then
-        while IFS= read -r -d '' embedded_framework; do
-            codesign --force -s "$SIGN_IDENTITY" "$embedded_framework" || {
-                echo "==> 错误：内嵌框架签名失败：$embedded_framework" >&2
-                exit 1
-            }
-        done < <(find "$APP/Contents/Frameworks" -depth \( -type d -name '*.framework' -o -type f -name '*.dylib' \) -print0)
-    fi
-    codesign --force -s "$SIGN_IDENTITY" \
+    sign_nested_code --options runtime --timestamp -s "$SIGN_IDENTITY"
+    codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" \
         --entitlements "$PROJ_DIR/RateSyncWidget/RateSyncWidget.entitlements" \
         "$WIDGET_EXTENSION" || { echo "==> 错误：Widget 扩展签名失败" >&2; exit 1; }
-    codesign --force -s "$SIGN_IDENTITY" \
+    codesign --force --options runtime --timestamp -s "$SIGN_IDENTITY" \
         --entitlements "$PROJ_DIR/Quality/Quality.entitlements" \
         "$APP" || { echo "==> 错误：App 签名失败" >&2; exit 1; }
     codesign -dv "$APP" 2>&1 | grep -E "Signature|Authority" | head -3
-
-    verify_entitlement_value() {
-        local bundle_path="$1"
-        local expected_value="$2"
-        if ! codesign -d --entitlements - "$bundle_path" 2>/dev/null | rg -qF -- "$expected_value"; then
-            echo "==> 错误：$bundle_path 缺少签名 entitlement：$expected_value" >&2
-            exit 1
-        fi
-    }
-
     verify_entitlement_value "$WIDGET_EXTENSION" "[Key] com.apple.security.app-sandbox"
-    verify_entitlement_value "$WIDGET_EXTENSION" "[Bool] true"
+    verify_entitlement_value "$WIDGET_EXTENSION" "group.com.biking.RateSync"
+    verify_entitlement_value "$APP" "group.com.biking.RateSync"
     codesign --verify --deep --strict "$APP"
+    if ! codesign -d --verbose=4 "$APP" 2>&1 | rg -q "flags=.*runtime"; then
+        echo "==> 错误：发布 App 未启用 Hardened Runtime" >&2
+        exit 1
+    fi
 fi
 
 # ---- 3. 检查 node / npm ----
@@ -155,9 +193,27 @@ if [[ -f "$DMG_CREATED" && "$DMG_CREATED" != "$OUT" ]]; then
     mv "$DMG_CREATED" "$OUT"
 fi
 
+if [[ "$SKIP_SIGNING" != "1" ]]; then
+    if [[ "$SKIP_NOTARIZATION" == "1" ]]; then
+        echo "==> 警告：RATESYNC_SKIP_NOTARIZATION=1，仅生成已签名但未公证的测试包"
+    else
+        if [[ -z "$NOTARY_PROFILE" ]]; then
+            echo "==> 错误：发布打包必须设置 RATESYNC_NOTARY_PROFILE，或显式设置 RATESYNC_SKIP_NOTARIZATION=1 生成测试包" >&2
+            exit 1
+        fi
+        echo "==> 提交 Apple 公证：$OUT"
+        xcrun notarytool submit "$OUT" --keychain-profile "$NOTARY_PROFILE" --wait
+        xcrun stapler staple "$OUT"
+        xcrun stapler validate "$OUT"
+    fi
+fi
+
 echo "==> 完成：$OUT"
-echo "    （分发到其他 Mac：首次打开需右键 → 打开，或先执行"
-echo "      xattr -dr com.apple.quarantine \"/Applications/$APP_NAME.app\"）"
+if [[ "$SKIP_SIGNING" == "1" || "$SKIP_NOTARIZATION" == "1" ]]; then
+    echo "    当前为本机测试包，不适合直接分发"
+else
+    echo "    已完成 Developer ID 签名、Hardened Runtime 和 Apple 公证"
+fi
 
 # ── Sparkle 签名（应用内更新）────────────────────────────
 SIGN_UPDATE="${SPARKLE_SIGN_UPDATE:-}"

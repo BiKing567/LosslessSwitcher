@@ -21,11 +21,11 @@ struct SharedNowPlayingTrack: Equatable {
     let updatedAt: Date
 
     var titleText: String {
-        normalized(title, fallback: "Not Playing")
+        normalized(title, fallback: NSLocalizedString("Not Playing", comment: "Widget placeholder when no track is playing"))
     }
 
     var artistText: String {
-        normalized(artist, fallback: "No Artist")
+        normalized(artist, fallback: NSLocalizedString("No Artist", comment: "Widget placeholder when artist is unavailable"))
     }
 
     private func normalized(_ value: String?, fallback: String) -> String {
@@ -44,7 +44,7 @@ enum RateSyncWidgetConfiguration {
     static let appGroupIdentifier = "group.com.biking.RateSync"
     private static let widgetBundleIdentifier = "com.biking.RateSync.Widget"
 
-    private struct WidgetState: Codable {
+    struct WidgetState: Codable, Equatable {
         var sampleRate: Double?
         var bitDepth: Int?
         var formatUpdatedAt: Date?
@@ -87,9 +87,15 @@ enum RateSyncWidgetConfiguration {
         date.addingTimeInterval(fallbackRefreshInterval)
     }
 
+    static func preferredAudioFormat(
+        persisted: SharedAudioFormat?,
+        live: SharedAudioFormat?
+    ) -> SharedAudioFormat? {
+        live ?? persisted
+    }
+
     static func loadNowPlayingTrack() -> SharedNowPlayingTrack? {
-        if let state = loadState() {
-            guard let updatedAt = state.trackUpdatedAt else { return nil }
+        if let state = loadState(), let updatedAt = state.trackUpdatedAt {
             return SharedNowPlayingTrack(
                 title: state.title,
                 artist: state.artist,
@@ -122,9 +128,9 @@ enum RateSyncWidgetConfiguration {
     }
 
     static func loadAudioFormat() -> SharedAudioFormat? {
-        if let state = loadState() {
-            guard let sampleRate = state.sampleRate,
-                  let updatedAt = state.formatUpdatedAt else { return nil }
+        if let state = loadState(),
+           let sampleRate = state.sampleRate,
+           let updatedAt = state.formatUpdatedAt {
             return SharedAudioFormat(
                 sampleRate: sampleRate,
                 bitDepth: state.bitDepth,
@@ -157,23 +163,34 @@ enum RateSyncWidgetConfiguration {
     }
 
     static func migrateLegacyState() {
-        guard loadState() == nil else { return }
+        let existing = loadState()
         let values = loadLegacyValues()
         let defaults = sharedDefaults
         let state = WidgetState(
-            sampleRate: (values?[sampleRateKey] as? NSNumber)?.doubleValue
+            sampleRate: existing?.sampleRate
+                ?? (values?[sampleRateKey] as? NSNumber)?.doubleValue
                 ?? defaults?.double(forKey: sampleRateKey),
-            bitDepth: (values?[bitDepthKey] as? NSNumber)?.intValue
+            bitDepth: existing?.bitDepth
+                ?? (values?[bitDepthKey] as? NSNumber)?.intValue
                 ?? defaults?.object(forKey: bitDepthKey) as? Int,
-            formatUpdatedAt: values?[formatUpdatedAtKey] as? Date
+            formatUpdatedAt: existing?.formatUpdatedAt
+                ?? values?[formatUpdatedAtKey] as? Date
                 ?? defaults?.object(forKey: formatUpdatedAtKey) as? Date,
-            title: values?[titleKey] as? String ?? defaults?.string(forKey: titleKey),
-            artist: values?[artistKey] as? String ?? defaults?.string(forKey: artistKey),
-            artworkDataBase64: values?[artworkKey] as? String ?? defaults?.string(forKey: artworkKey),
-            trackUpdatedAt: values?[updatedAtKey] as? Date
+            title: existing?.title
+                ?? values?[titleKey] as? String
+                ?? defaults?.string(forKey: titleKey),
+            artist: existing?.artist
+                ?? values?[artistKey] as? String
+                ?? defaults?.string(forKey: artistKey),
+            artworkDataBase64: existing?.artworkDataBase64
+                ?? values?[artworkKey] as? String
+                ?? defaults?.string(forKey: artworkKey),
+            trackUpdatedAt: existing?.trackUpdatedAt
+                ?? values?[updatedAtKey] as? Date
                 ?? defaults?.object(forKey: updatedAtKey) as? Date
         )
         guard state.formatUpdatedAt != nil || state.trackUpdatedAt != nil else { return }
+        guard state != existing else { return }
         saveState(state)
     }
 
@@ -327,13 +344,46 @@ enum RateSyncWidgetConfiguration {
         return propertyList as? [String: Any]
     }
 
+    static func mergeStates(_ states: [WidgetState]) -> WidgetState? {
+        guard !states.isEmpty else { return nil }
+
+        let newestFormat = states
+            .filter { state in
+                guard let sampleRate = state.sampleRate,
+                      sampleRate.isFinite,
+                      sampleRate > 0 else {
+                    return false
+                }
+                return state.formatUpdatedAt != nil
+            }
+            .max {
+                ($0.formatUpdatedAt ?? .distantPast) < ($1.formatUpdatedAt ?? .distantPast)
+            }
+        let newestTrack = states
+            .filter { $0.trackUpdatedAt != nil }
+            .max {
+                ($0.trackUpdatedAt ?? .distantPast) < ($1.trackUpdatedAt ?? .distantPast)
+            }
+        let merged = WidgetState(
+            sampleRate: newestFormat?.sampleRate,
+            bitDepth: newestFormat?.bitDepth,
+            formatUpdatedAt: newestFormat?.formatUpdatedAt,
+            title: newestTrack?.title,
+            artist: newestTrack?.artist,
+            artworkDataBase64: newestTrack?.artworkDataBase64,
+            trackUpdatedAt: newestTrack?.trackUpdatedAt
+        )
+        return merged.formatUpdatedAt != nil || merged.trackUpdatedAt != nil
+            ? merged
+            : nil
+    }
+
     private static func loadState() -> WidgetState? {
-        for stateURL in stateURLs {
-            guard let data = try? Data(contentsOf: stateURL),
-                  let state = try? PropertyListDecoder().decode(WidgetState.self, from: data) else { continue }
-            return state
+        let states = stateURLs.compactMap { stateURL -> WidgetState? in
+            guard let data = try? Data(contentsOf: stateURL) else { return nil }
+            return try? PropertyListDecoder().decode(WidgetState.self, from: data)
         }
-        return nil
+        return mergeStates(states)
     }
 
     private static func saveState(_ state: WidgetState) {

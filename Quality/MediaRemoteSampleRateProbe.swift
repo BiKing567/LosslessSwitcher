@@ -79,6 +79,11 @@ enum MediaRemoteSampleRateProbe {
             // When we know which app triggered the event, verify it is still
             // the active player before trusting its audio format keys.
             guard let getNowPlayingApplicationPID else {
+                guard RateSwitchingPolicy.shouldAcceptUnverifiedMediaRemoteFormat(expectedPID: expectedPID) else {
+                    Logger.switching.info("[MRProbe] active player PID API unavailable, ignoring unverified format")
+                    completeOnce.complete((nil, nil))
+                    return
+                }
                 completeOnce.complete(((dict[kSampleRate] as? NSNumber)?.doubleValue, (dict[kBitDepth] as? NSNumber)?.intValue))
                 return
             }
